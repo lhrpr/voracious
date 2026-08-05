@@ -1,0 +1,20 @@
+name: voracious_core
+description: >-
+  Platform-independent core for Voracious: subtitle parsing, annotated text,
+  language analysis, media library scanning, study-mode logic and the mpv
+  engine protocol. Pure Dart, no Flutter dependency, no UI.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  # All BSD-3-Clause, maintained by the Dart team.
+  collection: ^1.19.0
+  meta: ^1.16.0
+  path: ^1.9.0
+
+dev_dependencies:
+  lints: ^5.1.0
+  test: ^1.25.0

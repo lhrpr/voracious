@@ -23,6 +23,20 @@ Before using Voracious, you need to have a media collection that's organized and
 
 If your media collection is ready to go, open Voracious and hit the *Add Collection* link. Select the folder where your collection lives, and give it name, and add it. On the Library page, you can browse your collection and play videos (videos without any available subtitles will appear grey). In the player, check the help overlay for keyboard controls, and try different subtitle modes.
 
+# Cross-platform rewrite (in progress)
+
+A Flutter/Dart rewrite lives under [`flutter/`](flutter), targeting Windows,
+macOS, Android (including Google TV and Android TV), iOS and tvOS, with playback
+from a dynamically linked LGPL build of libmpv. It currently contains core code
+only — subtitle handling, language analysis, library scanning, the study modes
+and the mpv engine layer — all pure Dart and under test, with no UI yet. See
+[`flutter/README.md`](flutter/README.md), the build and licensing recipe in
+[`flutter/docs/lgpl-mpv-build.md`](flutter/docs/lgpl-mpv-build.md), and the
+background notes in
+[`video-app-licensing-and-frameworks.md`](video-app-licensing-and-frameworks.md).
+
+The Electron app documented below remains the shipping version.
+
 # Development
 
 ## Overview and repo structure

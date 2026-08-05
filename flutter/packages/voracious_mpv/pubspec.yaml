@@ -1,0 +1,19 @@
+name: voracious_mpv
+description: >-
+  Dart FFI bindings for libmpv (client API) plus a MediaPlayer implementation
+  built on them. Pure Dart — loads a dynamically linked libmpv at runtime, which
+  is what keeps an LGPL build of mpv usable from a proprietary application.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  ffi: ^2.1.3
+  voracious_core:
+    path: ../voracious_core
+
+dev_dependencies:
+  lints: ^5.1.0
+  test: ^1.25.0

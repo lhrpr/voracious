@@ -1,0 +1,17 @@
+# Dart / Flutter build output and tool state.
+.dart_tool/
+.packages
+build/
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+doc/api/
+
+# Native libraries fetched or built locally. These are LGPL binaries whose
+# corresponding source is published separately; they are never committed here.
+native/
+*.so
+*.so.*
+*.dylib
+*.dll
+*.framework/
