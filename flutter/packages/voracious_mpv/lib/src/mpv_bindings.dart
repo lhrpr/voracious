@@ -35,6 +35,19 @@ abstract final class MpvEventId {
   static const int hook = 25;
 }
 
+/// `mpv_error`. Only the codes the player has to tell apart are declared;
+/// everything else is reported through `mpv_error_string`.
+abstract final class MpvErrorCode {
+  static const int success = 0;
+
+  /// `MPV_ERROR_OPTION_NOT_FOUND` — the library has no option by that name.
+  ///
+  /// For an option added in a later mpv release than the one being linked
+  /// against, that is information rather than a failure; see
+  /// `MpvOption.optional`.
+  static const int optionNotFound = -5;
+}
+
 /// `mpv_format`.
 abstract final class MpvFormat {
   static const int none = 0;

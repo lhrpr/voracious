@@ -26,6 +26,11 @@ implementations behind the interfaces listed in the
 
 - `libmpv.dylib` in `Contents/Frameworks/`, loaded via `@rpath`.
 - `hwdec=videotoolbox`, `ao=coreaudio`.
+- Video output is implemented: `voracious_video` draws the mpv render context
+  into an IOSurface-backed `CVPixelBuffer` that Flutter composites as a
+  texture. It needs a libmpv with the OpenGL render API compiled in, which is a
+  different thing from `gpu-api=opengl` — see
+  [`lgpl-mpv-build.md`](lgpl-mpv-build.md#the-opengl-render-api-is-not-optional-and-is-not-gpu-apiopengl).
 - Sandboxing: a collection folder chosen through the open panel needs a
   security-scoped bookmark to survive a relaunch. `LocalFileSystem` is fine once
   the bookmark is resolved.

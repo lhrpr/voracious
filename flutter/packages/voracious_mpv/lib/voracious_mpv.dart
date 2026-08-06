@@ -7,7 +7,8 @@
 library;
 
 export 'src/mpv_bindings.dart'
-    show MpvEndFileReasonCode, MpvEventId, MpvFormat, MpvHandle;
+    show MpvEndFileReasonCode, MpvErrorCode, MpvEventId, MpvFormat, MpvHandle;
 export 'src/mpv_event_pump.dart' show MpvEventPump, observedProperties;
-export 'src/mpv_library.dart' show MpvLibrary, MpvLibraryNotFoundException;
+export 'src/mpv_library.dart'
+    show MpvLibrary, MpvLibraryNotFoundException, resolveLoadedPath;
 export 'src/mpv_player.dart' show MpvPlayer;

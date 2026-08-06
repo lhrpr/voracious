@@ -36,13 +36,15 @@ void main() {
       expect(message, contains('cannot open shared object file'));
     });
 
-    test('reports when no library can be found', () {
-      // Nothing on any platform is called this.
+    test('an explicit path that cannot be loaded is not silently replaced', () {
+      // Deterministic whether or not this machine has a libmpv: an explicit
+      // path is authoritative, so a bad one throws rather than falling back to
+      // whatever the system happens to provide.
       expect(
         () => MpvLibrary.open(explicitPath: '/nonexistent/libnothing.so'),
         throwsA(isA<MpvLibraryNotFoundException>()),
       );
-    }, skip: 'depends on whether a system libmpv happens to be installed');
+    });
   });
 
   group('property observation', () {

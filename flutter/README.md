@@ -3,10 +3,12 @@
 A cross-platform rewrite of Voracious on Flutter, with playback provided by a
 dynamically linked LGPL build of libmpv.
 
-This directory currently holds **core code only**: everything that can be built
-and verified without a screen, a codec, or a device. There is no Flutter UI here
-yet, and no platform plugin scaffolding — those come next, and they depend on
-none of this changing.
+Two pure-Dart packages hold everything that can be verified without a screen, a
+codec, or a device, and a macOS application renders it. The one piece still
+missing is video output: getting decoded frames onto the screen needs
+`mpv_render_context_*` drawing into a texture the toolkit owns, which is native
+code rather than Dart. Everything else — playback, the study modes, subtitles,
+the library — runs today.
 
 ## Why the split
 
@@ -28,6 +30,8 @@ rules of its own.
 |---|---|---|
 | [`voracious_core`](packages/voracious_core) | Pure Dart. No Flutter, no `dart:io`, no UI. | `collection`, `meta`, `path` |
 | [`voracious_mpv`](packages/voracious_mpv) | `dart:ffi` bindings to libmpv and a `MediaPlayer` on top. Pure Dart — loads the library at runtime. | `ffi`, `voracious_core` |
+| [`voracious_video`](packages/voracious_video) | Video output: an mpv render context drawn into a Flutter texture. macOS native. | `flutter` |
+| [`voracious_app`](apps/voracious_app) | The macOS application. Renders core's decisions and forwards intents; holds no study logic. | `flutter`, all of the above |
 
 `voracious_core.dart` is the public API; `voracious_core_io.dart` adds the
 `dart:io` implementations (`LocalFileSystem`, `IoAnkiTransport`) separately, so
@@ -113,9 +117,31 @@ dart analyze          # must be clean
 dart test             # 343 tests
 ```
 
-Same for `packages/voracious_mpv`. `voracious_mpv`'s tests cover the parts that
-do not need libmpv present; anything that calls into the library belongs in an
-integration suite that runs on a device.
+Same for `packages/voracious_mpv`, which additionally has an integration suite
+that calls into a real libmpv. Install one (`brew install mpv`, `apt install
+libmpv2`) and it runs with the rest; without one it skips itself.
+
+That suite is worth having rather than assuming. On first run against a real
+library it found three defects that no amount of pure-Dart testing could have
+shown: `gpu-api=opengl` in the Apple configuration, which current mpv rejects
+outright and which stopped the engine from starting at all; a library search
+that silently fell back to the system libmpv when an explicit bundled path
+failed, which for a shipped build means running an unknown and quite possibly
+GPL library; and a use-after-free on teardown, where the handle was destroyed
+while the event-pump thread was still inside `mpv_wait_event` — an abort on
+roughly one in four closes.
+
+The macOS app is in `apps/voracious_app`; `flutter test` there runs both widget
+tests and an end-to-end suite against a real engine.
+
+Video output is the one thing `flutter test` cannot reach, because under it
+there is no platform side at all. It has two checks of its own:
+`packages/voracious_video/tool/render_probe.sh` renders a few seconds into an
+IOSurface with no Flutter involved and reports what landed in it, and
+`apps/voracious_app/integration_test` needs a real embedder (`flutter test
+integration_test -d macos`). The first one has already earned its keep: the
+render was upside down, and no assertion anybody would think to write would
+have said so.
 
 To regenerate the ISO 639 table from the Electron app's copy:
 
@@ -138,9 +164,11 @@ pure Dart, and the seams above are where a different engine would attach.
 
 ## Not done yet
 
-- The Flutter UI, and the platform plugin that puts mpv's render output into a
-  texture. Video output through `mpv_render_context_*` needs a texture the
-  toolkit owns, which is why it is not in `voracious_mpv`.
+- Video output on any platform but macOS. `voracious_video` holds the macOS
+  renderer; the Dart API above it is platform-neutral, so the work per platform
+  is a renderer rather than a redesign.
+- The Windows, Android and iOS applications. Only the UI layer is missing —
+  every platform seam below it is implemented and tested.
 - A Japanese tokeniser implementation. The interface, the token-to-annotation
   pipeline and the furigana alignment are all here and tested; what is missing
   is the backend and its dictionary.

@@ -65,6 +65,62 @@ void main() {
       expect(optionsFor(MpvPlatform.macos)['load-scripts'], 'no');
     });
 
+    test('turns off the built-in scripts load-scripts leaves running', () {
+      // `load-scripts=no` only covers the user's scripts directory. mpv's own
+      // Lua scripts are compiled in and each needs its own switch, so a
+      // configuration that sets only `load-scripts` still starts eight of
+      // them on eight threads. Regression test for that, per script, because
+      // the failure is silent — nothing about it is visible from the app.
+      final options = optionsFor(MpvPlatform.macos);
+      for (final name in const [
+        'load-console',
+        'load-stats-overlay',
+        'load-auto-profiles',
+        'load-select',
+        'load-positioning',
+        'load-commands',
+        'load-context-menu',
+        'ytdl',
+        'osc',
+      ]) {
+        expect(options[name], 'no', reason: '$name still loads its script');
+      }
+    });
+
+    test('the built-in-script switches are the only optional options', () {
+      // Every other option has to be honoured for the player to behave, so
+      // `MpvPlayer.create` refuses to start on a library that rejects one.
+      // Marking something optional opts it out of that check, which is only
+      // defensible for a switch that removes work.
+      for (final platform in MpvPlatform.values) {
+        final optional = MpvConfiguration.forPlatform(platform)
+            .where((option) => option.optional)
+            .map((option) => option.name)
+            .toSet();
+        expect(
+          optional,
+          {
+            'load-console',
+            'load-stats-overlay',
+            'load-auto-profiles',
+            'load-select',
+            'load-positioning',
+            'load-commands',
+            'load-context-menu',
+            'ytdl',
+          },
+          reason: 'unexpected optional option in the $platform configuration',
+        );
+      }
+    });
+
+    test('optionality is part of an option\'s identity', () {
+      expect(
+        const MpvOption('ytdl', 'no'),
+        isNot(const MpvOption('ytdl', 'no', optional: true)),
+      );
+    });
+
     test('enables exact seeking, which study navigation depends on', () {
       expect(optionsFor(MpvPlatform.windows)['hr-seek'], 'yes');
     });

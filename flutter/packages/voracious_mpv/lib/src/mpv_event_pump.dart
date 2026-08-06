@@ -59,10 +59,32 @@ abstract final class _Key {
 
 /// Starts the event loop and streams decoded events.
 class MpvEventPump {
-  MpvEventPump._(this._isolate, this._receivePort, this.events);
+  MpvEventPump._(
+    this._isolate,
+    this._receivePort,
+    this._exitPort,
+    this._stopFlag,
+    this._bindings,
+    this._handle,
+    this.events,
+  );
 
   final Isolate _isolate;
   final ReceivePort _receivePort;
+
+  /// Fires when the pump isolate has actually terminated.
+  final ReceivePort _exitPort;
+
+  /// Shared with the pump isolate as raw memory, because that is the only way
+  /// to reach a thread sitting inside a blocking native call: it cannot service
+  /// a Dart message until it returns, and it does not return until mpv has
+  /// something to say.
+  final Pointer<Int32> _stopFlag;
+
+  final MpvBindings _bindings;
+  final MpvHandle _handle;
+
+  bool _stopped = false;
 
   /// Decoded engine events, in order.
   final Stream<MpvEvent> events;
@@ -74,14 +96,19 @@ class MpvEventPump {
     required String libraryPath,
   }) async {
     final receivePort = ReceivePort();
+    final exitPort = ReceivePort();
+    final stopFlag = calloc<Int32>();
+
     final isolate = await Isolate.spawn(
       _pumpEntryPoint,
       _PumpConfig(
         sendPort: receivePort.sendPort,
         handleAddress: handleAddress,
         libraryPath: libraryPath,
+        stopFlagAddress: stopFlag.address,
       ),
       debugName: 'mpv-event-pump',
+      onExit: exitPort.sendPort,
     );
 
     final controller = StreamController<MpvEvent>.broadcast();
@@ -91,13 +118,58 @@ class MpvEventPump {
       if (event != null) controller.add(event);
     });
 
-    return MpvEventPump._(isolate, receivePort, controller.stream);
+    // dlopen is refcounted and already resolved, so this costs nothing and
+    // gives the caller's isolate its own way to wake the pump.
+    final bindings = MpvLibrary.open(explicitPath: libraryPath).bindings;
+
+    return MpvEventPump._(
+      isolate,
+      receivePort,
+      exitPort,
+      stopFlag,
+      bindings,
+      Pointer<Void>.fromAddress(handleAddress),
+      controller.stream,
+    );
   }
 
-  /// Stops the loop and releases the isolate.
-  void stop() {
+  /// Stops the loop and waits for the isolate to leave libmpv.
+  ///
+  /// The waiting is the whole point. `Isolate.kill` cannot interrupt a thread
+  /// blocked in `mpv_wait_event` — it takes effect at the next Dart-level
+  /// checkpoint, which does not come until the call returns. Destroying the
+  /// handle while that thread is still inside it is a use-after-free, and mpv
+  /// catches it as a talloc canary assertion that aborts the process. It shows
+  /// up as an intermittent crash on closing a video, because it depends on
+  /// whether the pump happened to be blocked at that instant.
+  ///
+  /// So: raise the flag, wake mpv so the call returns now rather than at its
+  /// timeout, and do not come back until the isolate is gone.
+  Future<void> stop() async {
+    if (_stopped) return;
+    _stopped = true;
+
+    _stopFlag.value = 1;
+    _bindings.wakeup(_handle);
+
+    var exited = true;
+    await _exitPort.first.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        // The pump is wedged in a call that never returned. Killing it is no
+        // worse than the state we are already in.
+        exited = false;
+        _isolate.kill(priority: Isolate.immediate);
+        return null;
+      },
+    );
+
+    _exitPort.close();
     _receivePort.close();
-    _isolate.kill(priority: Isolate.immediate);
+
+    // Only once the isolate is definitely gone. If it is not, leaking four
+    // bytes beats freeing memory it may still be reading.
+    if (exited) calloc.free(_stopFlag);
   }
 
   static MpvEvent? _decodeMessage(Map<String, Object?> message) {
@@ -138,11 +210,15 @@ class _PumpConfig {
     required this.sendPort,
     required this.handleAddress,
     required this.libraryPath,
+    required this.stopFlagAddress,
   });
 
   final SendPort sendPort;
   final int handleAddress;
   final String libraryPath;
+
+  /// Address of the shared `Int32` the pump polls to learn it should stop.
+  final int stopFlagAddress;
 }
 
 /// The isolate body: block on mpv, decode, post, repeat.
@@ -150,11 +226,20 @@ void _pumpEntryPoint(_PumpConfig config) {
   final library = MpvLibrary.open(explicitPath: config.libraryPath);
   final bindings = library.bindings;
   final handle = Pointer<Void>.fromAddress(config.handleAddress);
+  final stopFlag = Pointer<Int32>.fromAddress(config.stopFlagAddress);
 
   while (true) {
+    // Checked on both sides of the blocking call: once so a stop requested
+    // while events were being decoded is honoured before going back to sleep,
+    // and again because the usual way this loop ends is a wakeup delivered
+    // while it was blocked here. Returning is what lets the other side know it
+    // is safe to destroy the handle.
+    if (stopFlag.value != 0) return;
+
     // A long timeout rather than an infinite one, so a handle that goes away
     // without a shutdown event does not wedge the isolate forever.
     final eventPointer = bindings.waitEvent(handle, 1);
+    if (stopFlag.value != 0) return;
     if (eventPointer == nullptr) continue;
 
     final event = eventPointer.ref;

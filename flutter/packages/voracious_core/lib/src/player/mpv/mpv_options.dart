@@ -37,17 +37,31 @@ enum MpvPlatform {
 /// A single `--name=value` option.
 @immutable
 class MpvOption {
-  const MpvOption(this.name, this.value);
+  const MpvOption(this.name, this.value, {this.optional = false});
 
   final String name;
   final String value;
 
-  @override
-  bool operator ==(Object other) =>
-      other is MpvOption && other.name == name && other.value == value;
+  /// Whether a build that has never heard of this option may ignore it.
+  ///
+  /// Almost every option here is load-bearing, so a library that rejects one
+  /// is a library this app cannot use and `MpvPlayer.create` refuses to start
+  /// on it. The exceptions are the switches that turn mpv's built-in scripts
+  /// off: they arrived across several mpv releases, and each one only ever
+  /// removes work. An older library should skip the ones it lacks rather than
+  /// fail to start. A rejected *value* stays fatal either way — only an
+  /// unknown option name is tolerated.
+  final bool optional;
 
   @override
-  int get hashCode => Object.hash(name, value);
+  bool operator ==(Object other) =>
+      other is MpvOption &&
+      other.name == name &&
+      other.value == value &&
+      other.optional == optional;
+
+  @override
+  int get hashCode => Object.hash(name, value, optional);
 
   @override
   String toString() => '$name=$value';
@@ -122,6 +136,36 @@ abstract final class MpvConfiguration {
         const MpvOption('config', 'no'),
         const MpvOption('load-scripts', 'no'),
 
+        // `load-scripts=no` covers the user's `scripts/` directory and nothing
+        // else. mpv's own scripts are compiled into the library and each has
+        // its own switch, so an embedded libmpv still starts eight of them:
+        // every one below, plus `osc` — already off above, which is why the
+        // on-screen controller is the one that does not appear here. Each runs
+        // on its own thread with its own Lua state, and `auto_profiles` and
+        // `ytdl_hook` also install `on_load` hooks that every `loadfile` then
+        // blocks on.
+        //
+        // None of them can reach anything in this app: the host owns the OSD,
+        // the keyboard and the menus, so console, stats, select, positioning,
+        // commands and context_menu have no input to receive and no surface to
+        // draw on. `auto_profiles` evaluates conditional profiles from a
+        // config file that `config=no` already refused to read. `ytdl_hook`
+        // shells out to yt-dlp for URLs, and Voracious opens local files.
+        //
+        // These are [MpvOption.optional] because they were added across mpv
+        // 0.32–0.41; a library predating one must skip it and start, not
+        // refuse. `load-console` was `load-osd-console` before 0.40 — the old
+        // name still works but warns on every start, so it is not set here and
+        // a pre-0.40 library keeps console.lua.
+        const MpvOption('load-console', 'no', optional: true),
+        const MpvOption('load-stats-overlay', 'no', optional: true),
+        const MpvOption('load-auto-profiles', 'no', optional: true),
+        const MpvOption('load-select', 'no', optional: true),
+        const MpvOption('load-positioning', 'no', optional: true),
+        const MpvOption('load-commands', 'no', optional: true),
+        const MpvOption('load-context-menu', 'no', optional: true),
+        const MpvOption('ytdl', 'no', optional: true),
+
         // Voracious loads, analyses and renders subtitles itself; mpv picking
         // up sidecar files as well would double every line on screen.
         const MpvOption('sub-auto', 'no'),
@@ -180,10 +224,17 @@ abstract final class MpvConfiguration {
           const MpvOption('ao', 'wasapi'),
         ];
 
+      // No `gpu-api` on the Apple platforms. Apple deprecated OpenGL and mpv
+      // dropped the GL backend there, so `gpu-api=opengl` is not merely
+      // suboptimal — it is not a value this build accepts, and because
+      // MpvPlayer.create treats a rejected option as fatal, setting it stops
+      // the engine from starting at all. Leaving it unset is also the correct
+      // answer rather than a workaround: under `vo=libmpv` the render API
+      // caller picks the backend through MPV_RENDER_PARAM_API_TYPE, and
+      // `gpu-api` configures the standalone `gpu` VO, which is not in use.
       case MpvPlatform.macos:
         return [
           const MpvOption('hwdec', 'videotoolbox'),
-          const MpvOption('gpu-api', 'opengl'),
           const MpvOption('ao', 'coreaudio'),
         ];
 
@@ -191,7 +242,6 @@ abstract final class MpvConfiguration {
       case MpvPlatform.tvos:
         return [
           const MpvOption('hwdec', 'videotoolbox'),
-          const MpvOption('gpu-api', 'opengl'),
           const MpvOption('ao', 'avfoundation'),
         ];
 

@@ -75,6 +75,12 @@ class MpvPlayer implements MediaPlayer {
       final value = option.value.toNativeUtf8();
       try {
         final code = bindings.setOptionString(handle, name, value);
+        // An optional option this build has never heard of is skipped: it is
+        // one of the built-in-script switches, and a library older than the
+        // release that added it should still start. Everything else is fatal,
+        // including a bad *value* for an option that does exist — that is a
+        // wrong configuration rather than an old library.
+        if (code == MpvErrorCode.optionNotFound && option.optional) continue;
         if (code < 0) {
           throw MediaPlayerException(
             'could not set ${option.name}=${option.value}: '
@@ -106,6 +112,22 @@ class MpvPlayer implements MediaPlayer {
   /// Description of the loaded library, for the about screen. The LGPL notice
   /// has to name the exact library the user is running.
   String get engineDescription => _library.describe();
+
+  /// The address of this engine's `mpv_handle*`.
+  ///
+  /// Exists for one caller: the platform video output, which has to create an
+  /// `mpv_render_context` on this exact handle and cannot be handed a Dart
+  /// object across a method channel. Nothing else should want it, and anything
+  /// that takes it must not outlive [dispose] — the handle is freed there.
+  int get nativeHandle => _handle.address;
+
+  /// The libmpv this player opened, as passed to `DynamicLibrary.open`.
+  ///
+  /// Also for the video output. Passing the path rather than letting the
+  /// native side rediscover one is what guarantees both sides land on the same
+  /// image: a second libmpv would have its own copy of the engine's globals
+  /// and would not recognise [nativeHandle] as belonging to it.
+  String get libraryPath => _library.path;
 
   @override
   PlaybackState get state => _machine.state;
@@ -237,7 +259,11 @@ class MpvPlayer implements MediaPlayer {
     _disposed = true;
 
     await _eventSubscription?.cancel();
-    _pump?.stop();
+
+    // Must complete before the handle is destroyed: the pump runs mpv's event
+    // loop on another thread, and mpv_terminate_destroy while that thread is
+    // inside mpv_wait_event is a use-after-free.
+    await _pump?.stop();
     await _states.close();
 
     _library.bindings.terminateDestroy(_handle);

@@ -1,0 +1,35 @@
+name: voracious_app
+description: >-
+  Voracious for macOS. The UI layer only: it renders what voracious_core
+  decides and forwards intents back to it, with playback provided by a
+  dynamically linked LGPL build of libmpv through voracious_mpv.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  file_selector: ^1.0.3
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  voracious_core:
+    path: ../../packages/voracious_core
+  voracious_mpv:
+    path: ../../packages/voracious_mpv
+  voracious_video:
+    path: ../../packages/voracious_video
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # Only for integration_test/, which needs a real macOS embedder to reach the
+  # video output plugin at all. See that directory's test for why.
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

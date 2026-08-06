@@ -105,7 +105,7 @@ Verify afterwards:
 | Platform | Extra flags | Output |
 |---|---|---|
 | Windows | `-Dd3d11=enabled -Dwasapi=enabled` | `libmpv-2.dll` |
-| macOS | `-Dcocoa=enabled -Dvideotoolbox-gl=enabled` | `libmpv.dylib` in the app bundle's `Frameworks/` |
+| macOS | `-Dgl=enabled -Dcocoa=enabled -Dvideotoolbox-gl=enabled` | `libmpv.dylib` in the app bundle's `Frameworks/` |
 | iOS / tvOS | `-Dios-gl=enabled`, cross-file toolchain | `mpv.framework` — must be a **dynamic** framework |
 | Android | `-Degl-android=enabled -Dmediacodec=enabled`, NDK cross-file, one build per ABI | `libmpv.so` under `jniLibs/<abi>/` |
 | Linux | `-Dwayland=enabled -Dx11=disabled -Dpulse=enabled` | `libmpv.so.2` |
@@ -113,6 +113,44 @@ Verify afterwards:
 Android needs `arm64-v8a`, `armeabi-v7a` and `x86_64`. That is a normal ABI
 split in one project, not per-vendor builds: MediaCodec is one runtime-queried
 API across every chipset.
+
+### The OpenGL render API is not optional, and is not `gpu-api=opengl`
+
+Video output goes through `mpv_render_context_*` with
+`MPV_RENDER_API_TYPE_OPENGL`, so **a build without OpenGL support has no
+picture at all.** These are two different things and the difference has already
+cost this project once:
+
+- `gpu-api=opengl` selects the standalone `gpu` video output, which needs a
+  windowing context. Apple builds of current mpv do not have one and reject the
+  option outright — `mpv --gpu-api=help` on Homebrew's mpv 0.41 offers `auto`
+  and `vulkan` and nothing else. That rejection is why the option is absent
+  from `MpvConfiguration`.
+- The render API needs no windowing context, because the caller supplies the GL
+  context. It comes from `video/out/opengl/libmpv_gl.c` and is present in the
+  very same build that rejects `gpu-api=opengl`.
+
+So `-Dgpu-api=opengl` being unavailable says nothing about whether the render
+API is there. What matters is that `gl` is enabled. Verify on the built
+library rather than inferring it:
+
+```sh
+# Must print the symbol. If it does not, the app will start, play audio, and
+# show a black screen with a message saying exactly this.
+nm -gU build/libmpv.dylib | grep mpv_render_context_create
+```
+
+`-Dvideotoolbox-gl=enabled` matters for the same path but for performance
+rather than correctness: it is what lets a VideoToolbox-decoded frame reach the
+GL renderer without a round trip through system memory. Homebrew's build omits
+it — it has only the libplacebo interop — and mpv falls back quietly, which is
+fine for development and wasteful for a shipped build.
+
+The plugin copies mpv's three client API headers rather than requiring them at
+build time; see
+[`voracious_video`](../packages/voracious_video/macos/voracious_video/Sources/mpv_client_api/README.md).
+They are ISC, and nothing links against libmpv — it is `dlsym` on both sides of
+the app, which is the same replaceability argument as everywhere else here.
 
 ## Linking
 
@@ -137,6 +175,7 @@ which is what the about screen needs to state.
 Before shipping a build:
 
 - [ ] `mpv --version` on the built library reports **LGPL**, not GPL.
+- [ ] The library exports `mpv_render_context_create`, or there is no video.
 - [ ] FFmpeg `config.h` has no `CONFIG_GPL`, `CONFIG_NONFREE`, `CONFIG_LIBX264`,
       `CONFIG_LIBX265` or `CONFIG_POSTPROC`.
 - [ ] libmpv is loaded dynamically and is replaceable in the shipped layout.

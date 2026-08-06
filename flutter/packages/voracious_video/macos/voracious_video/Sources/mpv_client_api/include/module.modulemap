@@ -1,0 +1,9 @@
+// Explicit rather than left to SwiftPM's generated one, so that the same
+// headers can be handed to a plain `swiftc -I include` invocation — which is
+// how tool/render_probe.swift builds the render path outside a Flutter app.
+//
+// render_gl.h pulls in render.h and client.h, so naming it is enough.
+module mpv_client_api {
+  header "mpv/render_gl.h"
+  export *
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The sandbox is off for development builds only, and for one reason: a
+	  sandboxed process may not dlopen a library outside its own bundle, so a
+	  debug build cannot load the libmpv installed on the developer's machine.
+
+	  Release builds keep the sandbox (see Release.entitlements) and load an
+	  LGPL libmpv bundled in Contents/Frameworks. Note that bundling Homebrew's
+	  mpv instead would not merely be untidy — that is a default GPL build, and
+	  shipping it inside a proprietary application is the exact outcome the
+	  dynamic-linking arrangement exists to prevent. See
+	  flutter/docs/lgpl-mpv-build.md.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>

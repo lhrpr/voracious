@@ -103,7 +103,12 @@ const List<ThirdPartyNotice> thirdPartyNotices = [
     notes: 'Built with --enable-lgpl. That build omits the X11 and legacy '
         'direct3d video outputs, OSS and JACK audio, vdpau, and DVD/CDDA/DVB '
         'input, none of which this application uses. Loaded dynamically at '
-        'runtime and replaceable by the user.',
+        'runtime and replaceable by the user. mpv\'s client API headers '
+        '(client.h, render.h, render_gl.h) are copied into the video output '
+        'plugin; those headers are ISC-licensed by the mpv project '
+        'specifically so that wrappers outside its tree may do this, and '
+        'nothing is linked at build time — every entry point is resolved at '
+        'runtime.',
   ),
   ThirdPartyNotice(
     name: 'FFmpeg',
