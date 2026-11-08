@@ -1,4 +1,4 @@
-/// Wires a live libmpv to the headless study session.
+/// Wires a live playback engine to the headless study session.
 ///
 /// The division of labour is the one the core was designed for: this class
 /// owns objects and lifetimes — opening the engine, loading tracks, saving the
@@ -12,8 +12,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:voracious_core/voracious_core.dart';
 import 'package:voracious_core/voracious_core_io.dart';
-import 'package:voracious_mpv/voracious_mpv.dart';
-import 'package:voracious_video/voracious_video.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+
+import '../engine/media_kit_player.dart';
 
 /// How far the app is through opening a video.
 enum PlayerLoadStage {
@@ -43,9 +44,9 @@ class PlayerController extends ChangeNotifier {
 
   static const MediaFileSystem _fileSystem = LocalFileSystem();
 
-  MpvPlayer? _player;
+  MediaKitPlayer? _player;
   StudySession? _session;
-  VideoOutput? _videoOutput;
+  VideoController? _videoController;
 
   StreamSubscription<PlaybackState>? _playbackSubscription;
   StreamSubscription<StudySessionSnapshot>? _sessionSubscription;
@@ -73,16 +74,15 @@ class PlayerController extends ChangeNotifier {
   List<LoadedSubtitleTrack> _tracks = const [];
   List<LoadedSubtitleTrack> get tracks => _tracks;
 
-  /// Description of the libmpv actually loaded. The about screen has to be
-  /// able to name it, which is an LGPL obligation.
+  /// Which engine is playing, for the about screen.
   String? get engineDescription => _player?.engineDescription;
 
-  /// The texture the engine's frames are being drawn into, or null if this
-  /// build has no video output. Playback does not depend on it.
-  VideoOutput? get videoOutput => _videoOutput;
+  /// Drives the video widget, or null if no picture could be set up.
+  /// Playback does not depend on it.
+  VideoController? get videoController => _videoController;
 
   /// Why there is no picture, when there is none. Null in the ordinary case
-  /// and also when [videoOutput] exists, so it is only ever a reason.
+  /// and also when [videoController] exists, so it is only ever a reason.
   String? _videoOutputError;
   String? get videoOutputError => _videoOutputError;
 
@@ -97,13 +97,11 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final player = await MpvPlayer.create(platform: MpvPlatform.macos);
+      final player = await MediaKitPlayer.create();
       _player = player;
 
-      // Before the file is opened, not after. `vo=libmpv` has nowhere to draw
-      // until a render context exists, so a file loaded first spends its
-      // opening frames with video output stalled.
-      await _startVideoOutput(player);
+      // Before the file is opened, so the first frames have somewhere to go.
+      _startVideoOutput(player);
 
       _session = StudySession(
         playback: MediaPlayerStudyController(player),
@@ -136,20 +134,15 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  /// Attaches the platform renderer to [player].
+  /// Attaches a video texture to [player].
   ///
-  /// Failure here is reported, not thrown. Everything else on this screen —
-  /// audio, the subtitle stack, every study mode — works without a picture,
-  /// and a build that cannot render video is still worth more than an error
-  /// page.
-  Future<void> _startVideoOutput(MpvPlayer player) async {
+  /// Failure here is reported, not thrown. Audio, the subtitle stack and every
+  /// study mode work without a picture.
+  void _startVideoOutput(MediaKitPlayer player) {
     try {
-      _videoOutput = await VideoOutput.create(
-        mpvHandle: player.nativeHandle,
-        libraryPath: player.libraryPath,
-      );
-    } on VideoOutputException catch (error) {
-      _videoOutputError = error.message;
+      _videoController = VideoController(player.player);
+    } on Object catch (error) {
+      _videoOutputError = error.toString();
     }
   }
 
@@ -257,10 +250,7 @@ class PlayerController extends ChangeNotifier {
     await _sessionSubscription?.cancel();
     await _session?.dispose();
 
-    // Strictly before the player. The render context holds the engine handle,
-    // and freeing them the other way round is a use-after-free that libmpv
-    // will only complain about once it is too late.
-    await _videoOutput?.dispose();
+    // media_kit tears the video texture down with the player.
     await _player?.dispose();
     super.dispose();
   }

@@ -18,26 +18,22 @@ implementations behind the interfaces listed in the
 
 ### Windows
 
-- libmpv as `libmpv-2.dll` beside the executable.
+- libmpv bundled by `media_kit_libs_windows_video`.
 - `hwdec=d3d11va`, `gpu-api=d3d11`, `ao=wasapi`.
 - `LocalFileSystem` works directly.
 
 ### macOS
 
-- `libmpv.dylib` in `Contents/Frameworks/`, loaded via `@rpath`.
+- libmpv bundled as `Mpv.framework` by `media_kit_libs_macos_video`.
 - `hwdec=videotoolbox`, `ao=coreaudio`.
-- Video output is implemented: `voracious_video` draws the mpv render context
-  into an IOSurface-backed `CVPixelBuffer` that Flutter composites as a
-  texture. It needs a libmpv with the OpenGL render API compiled in, which is a
-  different thing from `gpu-api=opengl` — see
-  [`lgpl-mpv-build.md`](lgpl-mpv-build.md#the-opengl-render-api-is-not-optional-and-is-not-gpu-apiopengl).
+- Video output works through `media_kit_video`.
 - Sandboxing: a collection folder chosen through the open panel needs a
   security-scoped bookmark to survive a relaunch. `LocalFileSystem` is fine once
   the bookmark is resolved.
 
 ### Android
 
-- `libmpv.so` per ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`) in `jniLibs`.
+- libmpv per ABI, bundled by `media_kit_libs_android_video`.
 - `hwdec=mediacodec-copy`, `ao=audiotrack`.
 - **Storage is the real work.** A collection chosen through the Storage Access
   Framework arrives as a content URI, not a path, and `LocalFileSystem` cannot
@@ -46,9 +42,8 @@ implementations behind the interfaces listed in the
 
 ### iOS
 
-- libmpv as a **dynamic** `mpv.framework`. Dynamic frameworks have been
-  supported since iOS 8; the static-linking anxiety in the usual write-ups does
-  not apply, and this is what VLC ships on the App Store under LGPL.
+- libmpv bundled by `media_kit_libs_ios_video`. Voracious isn't headed for the
+  App Store, so the GPL build is fine here too.
 - `hwdec=videotoolbox`, `ao=avfoundation`.
 - Files come from the Files app via security-scoped URLs, or from the app's own
   document directory.

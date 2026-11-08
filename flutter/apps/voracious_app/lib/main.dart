@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:voracious_core/voracious_core.dart';
 
@@ -11,6 +12,7 @@ import 'src/storage/file_key_value_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
 
   final directory = await getApplicationSupportDirectory();
   final store = await FileKeyValueStore.open(directory.path);

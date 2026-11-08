@@ -1,6 +1,6 @@
 # voracious_app
 
-The macOS application. UI only: it renders what `voracious_core` decides and
+The desktop application (macOS so far). UI only: it renders what `voracious_core` decides and
 forwards intents back to it.
 
 That division is not a style preference. `StudySession` decides which subtitle
@@ -15,18 +15,15 @@ pass-throughs whose meaning depends on the current mode.
 flutter run -d macos
 ```
 
-libmpv must be present. On a development machine:
+Playback is [media_kit](https://pub.dev/packages/media_kit), which bundles a
+stock libmpv into the app. Nothing needs installing beyond Flutter and
+CocoaPods. The first macOS build downloads that libmpv from GitHub; if
+`pod install` fails under Homebrew's Ruby, run it with `LANG=en_US.UTF-8`.
 
-```sh
-brew install mpv
-```
+Debug builds run **unsandboxed** so a collection folder anywhere on disk can be
+read without a security-scoped bookmark. Release builds keep the sandbox.
 
-Debug builds run **unsandboxed**, for one specific reason: a sandboxed process
-may not `dlopen` a library outside its own bundle, so it cannot load the libmpv
-installed on your machine. Release builds keep the sandbox and load an LGPL
-libmpv bundled in `Contents/Frameworks` — see [the build
-recipe](../../docs/lgpl-mpv-build.md). Bundling Homebrew's mpv instead would be
-a licensing error, not a shortcut: that is a default GPL build.
+Voracious is personal and open source, so the stock GPL libmpv is fine.
 
 ## Layout
 
@@ -86,47 +83,38 @@ flutter test
 its own — the annotation walk, and the study display, where a hidden track has
 to keep its space so revealing one does not shift the others.
 
-`player_controller_test.dart` runs the controllers against a real libmpv and a
+`player_controller_test.dart` runs the controllers against a real engine and a
 real file: a folder scanned off disk, subtitles decoded and analysed, and the
-study modes driven by genuine position updates from the engine. It skips itself
-when no libmpv is installed.
+study modes driven by genuine position updates. `flutter test` runs on the host
+VM, where media_kit's bundled libmpv isn't available, so these tests need a
+system copy (`brew install mpv`) and skip themselves without one.
 
-Video output is invisible to all of that, because `flutter test` has no
-platform side: `VideoOutput.create` throws `MissingPluginException`, the
-controller records it as a reason and carries on. That is the behaviour to
-have, and it means the ordinary suite cannot tell a working renderer from an
-absent one. So:
+Video output needs a real embedder:
 
 ```sh
 flutter test integration_test -d macos
 ```
 
-runs the same controllers on a real embedder and checks that a render context
-is created against the running engine, that a texture reaches the widget tree,
-and that tearing the screen down in the order the app actually uses does not
-take libmpv with it.
+runs the controllers inside an app build and checks that media_kit's video
+controller starts against the running engine, that a texture reaches the widget
+tree, and that closing the screen mid-playback doesn't crash.
 
 ## Video output
 
-There is a picture. It comes from
-[`voracious_video`](../../packages/voracious_video), which attaches an
-`mpv_render_context` to the engine `PlayerController` already owns and draws it
-into a `FlutterTexture` through an IOSurface.
+`PlayerController` creates a media_kit `VideoController` before opening the
+file, and the player screen shows it with `Video`, with media_kit's own
+controls and subtitles turned off. Voracious draws its own subtitle tracks on
+top.
 
-Two orderings in `PlayerController` are load-bearing and easy to undo by
-accident:
+Two things are easy to trip over:
 
-- The output is created **before** `player.open(...)`. `vo=libmpv` has nowhere
-  to draw until a render context exists.
-- It is disposed **before** the player. The render context holds the engine
-  handle.
-
-Losing video is not losing the app. If the render context cannot be created —
-most likely a libmpv without the OpenGL render API compiled in — the failure is
-recorded in `videoOutputError`, playback carries on with audio, subtitles and
-every study mode intact, and the player screen shows the reason over a black
-surface. The same path handles a file with no video track, which is a normal
-thing to open and gets a plain "Audio only".
+- media_kit sets the video output up after the next frame is drawn, and
+  `open()` waits for that. The app is always drawing, so this never shows up
+  there; a test without a screen has to pump frames while `start()` runs.
+- Losing video is not losing the app. If the video controller can't be
+  created, the reason is recorded in `videoOutputError` and playback carries on
+  with audio, subtitles and every study mode. A file with no video track gets a
+  plain "Audio only".
 
 ## Not done yet
 

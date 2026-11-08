@@ -12,7 +12,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:voracious_core/voracious_core.dart';
-import 'package:voracious_video/voracious_video.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../state/library_controller.dart';
 import '../state/player_controller.dart';
@@ -162,7 +162,7 @@ class _PlayerBody extends StatelessWidget {
     }
 
     final snapshot = controller.snapshot;
-    final output = controller.videoOutput;
+    final output = controller.videoController;
 
     // A file with no video track still renders — as black — so the notice is
     // decided by the engine's report rather than by whether a surface exists.
@@ -175,7 +175,16 @@ class _PlayerBody extends StatelessWidget {
             children: [
               const Positioned.fill(child: ColoredBox(color: Colors.black)),
               if (output != null)
-                Positioned.fill(child: VideoSurface(output: output)),
+                Positioned.fill(
+                  child: Video(
+                    controller: output,
+                    controls: NoVideoControls,
+                    fill: Colors.black,
+                    // Voracious draws its own subtitles above the picture.
+                    subtitleViewConfiguration:
+                        const SubtitleViewConfiguration(visible: false),
+                  ),
+                ),
               if (output == null || !hasPicture)
                 Positioned.fill(
                   child: _NoPictureNotice(

@@ -8,6 +8,7 @@
 /// Skips itself when no libmpv is installed.
 library;
 
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,19 +16,30 @@ import 'package:path/path.dart' as p;
 import 'package:voracious_app/src/state/library_controller.dart';
 import 'package:voracious_app/src/state/player_controller.dart';
 import 'package:voracious_core/voracious_core.dart';
-import 'package:voracious_mpv/voracious_mpv.dart';
+import 'package:media_kit/media_kit.dart';
 
-bool get _hasLibmpv {
-  try {
-    MpvLibrary.open();
-    return true;
-  } on Object {
-    return false;
+/// media_kit bundles libmpv into app builds, but `flutter test` runs on the
+/// host VM and needs a system copy (`brew install mpv`).
+final String? _libmpv = () {
+  for (final name in const [
+    'libmpv.dylib',
+    '/opt/homebrew/lib/libmpv.dylib',
+    '/usr/local/lib/libmpv.dylib',
+    'libmpv.so.2',
+    'libmpv-2.dll',
+  ]) {
+    try {
+      DynamicLibrary.open(name);
+      return name;
+    } on Object {
+      continue;
+    }
   }
-}
+  return null;
+}();
 
 final Object? _skip =
-    _hasLibmpv ? null : 'no libmpv on this machine; install one to run these';
+    _libmpv != null ? null : 'no libmpv on this machine; install one to run these';
 
 String get _fixtures => p.join(Directory.current.path, 'test', 'fixtures');
 
@@ -45,6 +57,8 @@ Future<bool> _waitUntil(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // Throws without a libmpv, so only when the engine tests will run.
+  if (_libmpv case final path?) MediaKit.ensureInitialized(libmpv: path);
 
   group('LibraryController', () {
     late LibraryController controller;
@@ -127,7 +141,7 @@ void main() {
       await startPlayer();
 
       expect(player.stage, PlayerLoadStage.ready, reason: player.error ?? '');
-      expect(player.engineDescription, contains('libmpv'));
+      expect(player.engineDescription, contains('media_kit'));
 
       // Loaded, decoded, language-detected and analysed, off real files.
       expect(player.tracks, hasLength(2));

@@ -1,14 +1,11 @@
 # Voracious — Flutter/Dart core
 
-A cross-platform rewrite of Voracious on Flutter, with playback provided by a
-dynamically linked LGPL build of libmpv.
+A cross-platform rewrite of Voracious on Flutter, with playback provided by
+libmpv through [media_kit](https://pub.dev/packages/media_kit).
 
-Two pure-Dart packages hold everything that can be verified without a screen, a
-codec, or a device, and a macOS application renders it. The one piece still
-missing is video output: getting decoded frames onto the screen needs
-`mpv_render_context_*` drawing into a texture the toolkit owns, which is native
-code rather than Dart. Everything else — playback, the study modes, subtitles,
-the library — runs today.
+A pure-Dart core holds everything that can be verified without a screen, a
+codec, or a device, and a desktop application renders it. On macOS that app
+plays video, runs the study modes and shows several subtitle tracks at once.
 
 ## Why the split
 
@@ -29,8 +26,6 @@ rules of its own.
 | Package | What it is | Depends on |
 |---|---|---|
 | [`voracious_core`](packages/voracious_core) | Pure Dart. No Flutter, no `dart:io`, no UI. | `collection`, `meta`, `path` |
-| [`voracious_mpv`](packages/voracious_mpv) | `dart:ffi` bindings to libmpv and a `MediaPlayer` on top. Pure Dart — loads the library at runtime. | `ffi`, `voracious_core` |
-| [`voracious_video`](packages/voracious_video) | Video output: an mpv render context drawn into a Flutter texture. macOS native. | `flutter` |
 | [`voracious_app`](apps/voracious_app) | The macOS application. Renders core's decisions and forwards intents; holds no study logic. | `flutter`, all of the above |
 
 `voracious_core.dart` is the public API; `voracious_core_io.dart` adds the
@@ -66,7 +61,7 @@ Everything platform-bound sits behind an interface that the host app implements:
 | `MediaFileSystem` | `LocalFileSystem`, or a SAF/content-URI adapter on Android | Android hands out content URIs, not paths |
 | `Tokenizer` | MeCab, Sudachi, or a Kuromoji port | The dictionary is tens of MB; packaging it is a per-platform decision |
 | `CharsetDecoder` | the OS text converters | Shift_JIS and friends are tens of thousands of table entries the platform already ships |
-| `MediaPlayer` | `voracious_mpv` | And something else entirely on a platform that will not run native code |
+| `MediaPlayer` | `MediaKitPlayer` in the app | And something else entirely on a platform that will not run native code |
 | `AudioClipExtractor` | platform encoder | Encoding is where patent exposure lives; it stays off the playback path |
 | `AnkiTransport` | `IoAnkiTransport` | Keeps `dart:io` out of core |
 | `KeyValueStore` | SQLite, SharedPreferences, a file | Every platform already has one |
@@ -94,21 +89,14 @@ All of that is covered in `test/study_session_test.dart`.
 
 ## Licensing
 
-Playback is a dynamically linked LGPL build of mpv. The build recipe, the
-components LGPL mode removes, and the distribution obligations are in
-[`docs/lgpl-mpv-build.md`](docs/lgpl-mpv-build.md).
-
-Two things enforce it rather than merely documenting it:
-
-- `validateLgplSafety` rejects any mpv configuration naming a component that an
-  LGPL build does not have. Every shipped platform configuration is asserted
-  against it in `mpv_test.dart`, and `MpvPlayer.create` re-checks at startup.
-- The tests assert that every copyleft entry in `thirdPartyNotices` is
-  dynamically linked and carries a corresponding-source URL.
+Voracious is personal and open source, with no release planned, so the app uses
+media_kit's stock GPL libmpv as-is. Core still carries an LGPL guard
+(`validateLgplSafety`) and third-party notices from when a proprietary release
+was on the table; nothing in the app depends on them any more.
 
 ## Working on it
 
-The Dart SDK is enough; Flutter is not needed for anything in this directory.
+The Dart SDK is enough for core; the app needs Flutter and CocoaPods.
 
 ```sh
 cd packages/voracious_core
@@ -117,31 +105,10 @@ dart analyze          # must be clean
 dart test             # 343 tests
 ```
 
-Same for `packages/voracious_mpv`, which additionally has an integration suite
-that calls into a real libmpv. Install one (`brew install mpv`, `apt install
-libmpv2`) and it runs with the rest; without one it skips itself.
-
-That suite is worth having rather than assuming. On first run against a real
-library it found three defects that no amount of pure-Dart testing could have
-shown: `gpu-api=opengl` in the Apple configuration, which current mpv rejects
-outright and which stopped the engine from starting at all; a library search
-that silently fell back to the system libmpv when an explicit bundled path
-failed, which for a shipped build means running an unknown and quite possibly
-GPL library; and a use-after-free on teardown, where the handle was destroyed
-while the event-pump thread was still inside `mpv_wait_event` — an abort on
-roughly one in four closes.
-
-The macOS app is in `apps/voracious_app`; `flutter test` there runs both widget
-tests and an end-to-end suite against a real engine.
-
-Video output is the one thing `flutter test` cannot reach, because under it
-there is no platform side at all. It has two checks of its own:
-`packages/voracious_video/tool/render_probe.sh` renders a few seconds into an
-IOSurface with no Flutter involved and reports what landed in it, and
-`apps/voracious_app/integration_test` needs a real embedder (`flutter test
-integration_test -d macos`). The first one has already earned its keep: the
-render was upside down, and no assertion anybody would think to write would
-have said so.
+The app is in `apps/voracious_app`. `flutter test` there runs the widget tests,
+plus an end-to-end suite against a real engine when a system libmpv is
+installed (`brew install mpv`). Video output needs a real embedder:
+`flutter test integration_test -d macos`.
 
 To regenerate the ISO 639 table from the Electron app's copy:
 
@@ -164,11 +131,8 @@ pure Dart, and the seams above are where a different engine would attach.
 
 ## Not done yet
 
-- Video output on any platform but macOS. `voracious_video` holds the macOS
-  renderer; the Dart API above it is platform-neutral, so the work per platform
-  is a renderer rather than a redesign.
-- The Windows, Android and iOS applications. Only the UI layer is missing —
-  every platform seam below it is implemented and tested.
+- Windows, Linux, Android and iOS builds. media_kit covers playback and video
+  on all of them, so what's left is platform setup and per-platform UI.
 - A Japanese tokeniser implementation. The interface, the token-to-annotation
   pipeline and the furigana alignment are all here and tested; what is missing
   is the backend and its dictionary.

@@ -1,8 +1,8 @@
 name: voracious_app
 description: >-
-  Voracious for macOS. The UI layer only: it renders what voracious_core
+  Voracious desktop. The UI layer only: it renders what voracious_core
   decides and forwards intents back to it, with playback provided by a
-  dynamically linked LGPL build of libmpv through voracious_mpv.
+  libmpv through media_kit.
 publish_to: none
 version: 0.1.0
 
@@ -17,10 +17,11 @@ dependencies:
   path_provider: ^2.1.5
   voracious_core:
     path: ../../packages/voracious_core
-  voracious_mpv:
-    path: ../../packages/voracious_mpv
-  voracious_video:
-    path: ../../packages/voracious_video
+  media_kit: ^1.2.0
+  media_kit_video: ^1.3.0
+  # Bundles a stock (GPL) libmpv for each platform. Fine for a personal,
+  # open-source build; see the root README.
+  media_kit_libs_video: ^1.0.6
 
 dev_dependencies:
   flutter_test:

@@ -3,16 +3,10 @@
 <plist version="1.0">
 <dict>
 	<!--
-	  The sandbox is off for development builds only, and for one reason: a
-	  sandboxed process may not dlopen a library outside its own bundle, so a
-	  debug build cannot load the libmpv installed on the developer's machine.
-
-	  Release builds keep the sandbox (see Release.entitlements) and load an
-	  LGPL libmpv bundled in Contents/Frameworks. Note that bundling Homebrew's
-	  mpv instead would not merely be untidy — that is a default GPL build, and
-	  shipping it inside a proprietary application is the exact outcome the
-	  dynamic-linking arrangement exists to prevent. See
-	  flutter/docs/lgpl-mpv-build.md.
+	  The sandbox is off for development builds so tests and debug runs can
+	  read collection folders anywhere on disk without a security-scoped
+	  bookmark. libmpv comes bundled by media_kit either way. Release builds
+	  keep the sandbox; see Release.entitlements.
 	-->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
