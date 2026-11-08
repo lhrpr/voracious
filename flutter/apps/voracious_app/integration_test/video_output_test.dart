@@ -95,6 +95,12 @@ void main() {
       );
       expect(controller.videoOutputError, isNull);
 
+      // The fixture's own subtitle track, extracted through the real app
+      // support directory, alongside its two sidecar files.
+      expect(controller.embeddedSubtitleError, isNull);
+      expect(controller.tracks.map((t) => t.id), contains(endsWith('#track4')));
+      expect(controller.tracks, hasLength(3));
+
       await controller.dispose();
     });
 

@@ -13,9 +13,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:voracious_app/src/engine/embedded_subtitle_cache.dart';
 import 'package:voracious_app/src/state/library_controller.dart';
 import 'package:voracious_app/src/state/player_controller.dart';
 import 'package:voracious_core/voracious_core.dart';
+import 'package:voracious_core/voracious_core_io.dart';
 import 'package:media_kit/media_kit.dart';
 
 /// media_kit bundles libmpv into app builds, but `flutter test` runs on the
@@ -38,8 +40,9 @@ final String? _libmpv = () {
   return null;
 }();
 
-final Object? _skip =
-    _libmpv != null ? null : 'no libmpv on this machine; install one to run these';
+final Object? _skip = _libmpv != null
+    ? null
+    : 'no libmpv on this machine; install one to run these';
 
 String get _fixtures => p.join(Directory.current.path, 'test', 'fixtures');
 
@@ -53,6 +56,13 @@ Future<bool> _waitUntil(
     await Future<void>.delayed(const Duration(milliseconds: 30));
   }
   return condition();
+}
+
+/// Leaves embedded tracks out, so the engine tests below see only the two
+/// sidecar files they were written around.
+class _NoEmbeddedSubtitles extends EmbeddedSubtitleCache {
+  @override
+  Future<List<SubtitleFileRef>> refsFor(VideoEntry video) async => const [];
 }
 
 void main() {
@@ -109,6 +119,63 @@ void main() {
     });
   });
 
+  group('EmbeddedSubtitleCache', () {
+    late Directory cacheDir;
+    late EmbeddedSubtitleCache cache;
+
+    setUp(() async {
+      cacheDir = await Directory.systemTemp.createTemp('voracious_subs');
+      cache = EmbeddedSubtitleCache(root: () async => cacheDir);
+    });
+
+    tearDown(() => cacheDir.delete(recursive: true));
+
+    VideoEntry entryFor(String fileName) => VideoEntry(
+          id: fileName,
+          name: p.basenameWithoutExtension(fileName),
+          path: p.join(_fixtures, fileName),
+          subtitleFiles: const [],
+        );
+
+    test('extracts the text track embedded in an MKV', () async {
+      final refs = await cache.refsFor(entryFor('Sample.Episode.S01E02.mkv'));
+
+      expect(refs, hasLength(1));
+      final ref = refs.single;
+      expect(ref.id, 'Sample.Episode.S01E02.mkv#track4');
+      expect(ref.format, SubtitleFormat.srt);
+      expect(ref.languageCode, 'jpn');
+      expect(File(ref.path).existsSync(), isTrue);
+
+      // Loads like any sidecar file.
+      final track = await SubtitleTrackLoader(
+        fileSystem: const LocalFileSystem(),
+        analyzer: TextAnalyzer(),
+      ).load(ref);
+      expect(track.cues.length, 2);
+      expect(track.languageCode, 'jpn');
+    });
+
+    test('reuses the cache on the next play', () async {
+      final video = entryFor('Sample.Episode.S01E02.mkv');
+      final first = await cache.refsFor(video);
+      final manifest = cacheDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .singleWhere((f) => p.basename(f.path) == 'manifest.json');
+      final writtenAt = manifest.lastModifiedSync();
+
+      final second = await cache.refsFor(video);
+      expect(second.map((r) => r.path), first.map((r) => r.path));
+      expect(manifest.lastModifiedSync(), writtenAt);
+    });
+
+    test('returns nothing for a file that is not Matroska', () async {
+      expect(await cache.refsFor(entryFor('Sample.Episode.S01E02.en.srt')),
+          isEmpty);
+    });
+  });
+
   group('PlayerController against a real engine', () {
     late LibraryController library;
     late PlayerController player;
@@ -133,6 +200,7 @@ void main() {
         video: library.index.videos.single,
         preferences: preferences,
         onPositionRecorded: (_) {},
+        embeddedSubtitles: _NoEmbeddedSubtitles(),
       );
       await player.start();
     }
@@ -239,12 +307,29 @@ void main() {
       expect(player.loop, isNull);
     });
 
+    test('loads embedded tracks alongside sidecar files', () async {
+      final cacheDir = await Directory.systemTemp.createTemp('voracious_subs');
+      addTearDown(() => cacheDir.delete(recursive: true));
+      player = PlayerController(
+        video: library.index.videos.single,
+        preferences: const Preferences(),
+        onPositionRecorded: (_) {},
+        embeddedSubtitles: EmbeddedSubtitleCache(root: () async => cacheDir),
+      );
+      await player.start();
+
+      expect(player.embeddedSubtitleError, isNull);
+      expect(player.tracks, hasLength(3));
+      expect(player.tracks.map((t) => t.id), contains(endsWith('#track4')));
+    });
+
     test('resumes from a stored position', () async {
       player = PlayerController(
         video: library.index.videos.single,
         preferences: const Preferences(),
         resumeFrom: const Duration(milliseconds: 1800),
         onPositionRecorded: (_) {},
+        embeddedSubtitles: _NoEmbeddedSubtitles(),
       );
       await player.start();
 

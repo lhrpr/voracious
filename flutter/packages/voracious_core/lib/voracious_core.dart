@@ -56,6 +56,10 @@ export 'src/library/media_library.dart';
 export 'src/library/media_scanner.dart';
 export 'src/library/subtitle_loader.dart';
 
+// Embedded subtitles
+export 'src/matroska/ebml.dart' show ByteSource, MemoryByteSource;
+export 'src/matroska/matroska_subtitles.dart';
+
 // Playback
 export 'src/player/media_player.dart';
 export 'src/player/media_track.dart';

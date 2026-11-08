@@ -14,6 +14,7 @@ import 'package:voracious_core/voracious_core.dart';
 import 'package:voracious_core/voracious_core_io.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../engine/embedded_subtitle_cache.dart';
 import '../engine/media_kit_player.dart';
 
 /// How far the app is through opening a video.
@@ -32,7 +33,8 @@ class PlayerController extends ChangeNotifier {
     required this.preferences,
     required this.onPositionRecorded,
     this.resumeFrom = Duration.zero,
-  });
+    EmbeddedSubtitleCache? embeddedSubtitles,
+  }) : embeddedSubtitles = embeddedSubtitles ?? EmbeddedSubtitleCache();
 
   final VideoEntry video;
   final Preferences preferences;
@@ -41,6 +43,15 @@ class PlayerController extends ChangeNotifier {
   final void Function(Duration position) onPositionRecorded;
 
   final Duration resumeFrom;
+
+  /// Text subtitle tracks inside the video file itself (MKV), extracted and
+  /// cached on first play.
+  final EmbeddedSubtitleCache embeddedSubtitles;
+
+  /// Why embedded tracks couldn't be read, when they couldn't. Sidecar files
+  /// still load either way.
+  String? _embeddedSubtitleError;
+  String? get embeddedSubtitleError => _embeddedSubtitleError;
 
   static const MediaFileSystem _fileSystem = LocalFileSystem();
 
@@ -154,7 +165,14 @@ class PlayerController extends ChangeNotifier {
       excludeAssStyles: conventionalNonDialogueStyles,
     );
 
-    final refs = video.subtitleFiles
+    var embedded = const <SubtitleFileRef>[];
+    try {
+      embedded = await embeddedSubtitles.refsFor(video);
+    } on Object catch (error) {
+      _embeddedSubtitleError = error.toString();
+    }
+
+    final refs = [...video.subtitleFiles, ...embedded]
         .where((ref) => !preferences.hideForcedTracks || ref.isGoodStudyTrack)
         .toList();
 
