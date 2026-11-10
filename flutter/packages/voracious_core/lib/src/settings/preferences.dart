@@ -6,6 +6,7 @@ import 'package:meta/meta.dart';
 import '../anki/card_builder.dart';
 import '../japanese/furigana.dart';
 import '../study/subtitle_mode.dart';
+import '../vocab/vocab_client.dart';
 
 /// Everything the user can configure.
 ///
@@ -28,6 +29,7 @@ class Preferences {
     this.hideForcedTracks = true,
     this.subtitleFontScale = 1,
     this.resumePlayback = true,
+    this.vocab = const VocabSettings(),
   });
 
   /// Show furigana over kanji.
@@ -65,6 +67,9 @@ class Preferences {
   /// Resume each video where it was left off.
   final bool resumePlayback;
 
+  /// The vocab server that colours subtitle words by status while paused.
+  final VocabSettings vocab;
+
   Preferences copyWith({
     bool? showRuby,
     bool? showHelp,
@@ -79,6 +84,7 @@ class Preferences {
     bool? hideForcedTracks,
     double? subtitleFontScale,
     bool? resumePlayback,
+    VocabSettings? vocab,
   }) =>
       Preferences(
         showRuby: showRuby ?? this.showRuby,
@@ -94,6 +100,7 @@ class Preferences {
         hideForcedTracks: hideForcedTracks ?? this.hideForcedTracks,
         subtitleFontScale: subtitleFontScale ?? this.subtitleFontScale,
         resumePlayback: resumePlayback ?? this.resumePlayback,
+        vocab: vocab ?? this.vocab,
       );
 
   Map<String, Object?> toJson() => {
@@ -110,6 +117,7 @@ class Preferences {
         'hideForcedTracks': hideForcedTracks,
         'subtitleFontScale': subtitleFontScale,
         'resumePlayback': resumePlayback,
+        'vocab': vocab.toJson(),
       };
 
   /// Reads preferences, falling back to the default for anything missing or
@@ -145,6 +153,10 @@ class Preferences {
       subtitleFontScale:
           readDouble(json['subtitleFontScale'], defaults.subtitleFontScale),
       resumePlayback: readBool(json['resumePlayback'], defaults.resumePlayback),
+      vocab: json['vocab'] is Map
+          ? VocabSettings.fromJson(
+              (json['vocab']! as Map).cast<String, Object?>())
+          : defaults.vocab,
     );
   }
 }

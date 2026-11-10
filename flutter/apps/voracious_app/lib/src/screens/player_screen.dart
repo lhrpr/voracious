@@ -18,6 +18,7 @@ import '../state/library_controller.dart';
 import '../state/player_controller.dart';
 import '../widgets/subtitle_stack.dart';
 import '../widgets/transport_bar.dart';
+import '../widgets/vocab_word_editor.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -155,6 +156,24 @@ class _PlayerBody extends StatelessWidget {
   final PlayerController controller;
   final bool showHelp;
 
+  Future<void> _editWord(
+    BuildContext context,
+    int trackIndex,
+    VocabToken token,
+    Rect wordRect,
+  ) async {
+    final vocab = controller.vocab;
+    final cue = controller.snapshot?.tracks[trackIndex].cue;
+    if (vocab == null) return;
+    await showVocabWordEditor(
+      context: context,
+      token: token,
+      wordRect: wordRect,
+      settings: vocab.settings,
+      save: (edit) => controller.saveVocab(edit, cue: cue),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (controller.stage == PlayerLoadStage.failed) {
@@ -202,7 +221,16 @@ class _PlayerBody extends StatelessWidget {
                     showRuby: controller.preferences.showRuby,
                     fontScale: controller.preferences.subtitleFontScale,
                     onRevealTrack: controller.revealAll,
+                    vocabTokensFor: controller.vocabTokensFor,
+                    onVocabTap: (index, token, rect) =>
+                        _editWord(context, index, token, rect),
                   ),
+                ),
+              if (controller.showsVocab && controller.vocab!.error != null)
+                Positioned(
+                  left: 16,
+                  top: 16,
+                  child: _VocabErrorBadge(message: controller.vocab!.error!),
                 ),
               if (controller.stage != PlayerLoadStage.ready)
                 Positioned(
@@ -398,6 +426,35 @@ class _ModeSelector extends StatelessWidget {
       );
 }
 
+/// The vocab server couldn't be reached or refused a lookup; the subtitles
+/// are drawn plainly meanwhile.
+class _VocabErrorBadge extends StatelessWidget {
+  const _VocabErrorBadge({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: message,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off, size: 16, color: Colors.orangeAccent),
+              SizedBox(width: 6),
+              Text('Word statuses unavailable',
+                  style: TextStyle(color: Colors.white, fontSize: 12)),
+            ],
+          ),
+        ),
+      );
+}
+
 class _HelpOverlay extends StatelessWidget {
   const _HelpOverlay();
 
@@ -409,6 +466,7 @@ class _HelpOverlay extends StatelessWidget {
     ('1…9', 'Toggle one track (manual mode)'),
     ('R', 'Reveal everything'),
     ('L', 'Loop the current line / clear the loop'),
+    ('Click', 'While paused: a coloured word, to set its status'),
     ('H', 'Show or hide this help'),
     ('Esc', 'Back to the library'),
   ];

@@ -16,6 +16,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../engine/embedded_subtitle_cache.dart';
 import '../engine/media_kit_player.dart';
+import '../widgets/transport_bar.dart' show formatDuration;
+import 'vocab_highlighter.dart';
 
 /// How far the app is through opening a video.
 enum PlayerLoadStage {
@@ -34,7 +36,25 @@ class PlayerController extends ChangeNotifier {
     required this.onPositionRecorded,
     this.resumeFrom = Duration.zero,
     EmbeddedSubtitleCache? embeddedSubtitles,
-  }) : embeddedSubtitles = embeddedSubtitles ?? EmbeddedSubtitleCache();
+  }) : embeddedSubtitles = embeddedSubtitles ?? EmbeddedSubtitleCache() {
+    final settings = preferences.vocab;
+    if (settings.isConfigured) {
+      _vocabTransport = IoVocabTransport();
+      vocab = VocabHighlighter(
+        settings: settings,
+        client: VocabClient(
+          transport: _vocabTransport!,
+          baseUrl: Uri.parse(settings.serverUrl.trim()),
+          token: settings.token.trim(),
+        ),
+      )..addListener(notifyListeners);
+    }
+  }
+
+  /// Colours the target-language subtitles by word status while paused.
+  /// Null when no vocab server is set up.
+  VocabHighlighter? vocab;
+  IoVocabTransport? _vocabTransport;
 
   final VideoEntry video;
   final Preferences preferences;
@@ -118,8 +138,10 @@ class PlayerController extends ChangeNotifier {
         playback: MediaPlayerStudyController(player),
         mode: preferences.subtitleMode,
       );
-      _sessionSubscription =
-          _session!.snapshots.listen((_) => notifyListeners());
+      _sessionSubscription = _session!.snapshots.listen((_) {
+        _requestVocab();
+        notifyListeners();
+      });
 
       _playbackSubscription = player.states.listen(_onPlaybackState);
 
@@ -232,7 +254,70 @@ class PlayerController extends ChangeNotifier {
       }
     }
 
+    if (state.isPaused != previous.isPaused) _requestVocab();
     notifyListeners();
+  }
+
+  /// Word statuses are shown only while paused: playback looks as it always
+  /// does, and pausing on a line is what asks how its words stand.
+  bool get showsVocab =>
+      vocab != null && playback.isPaused && _stage == PlayerLoadStage.ready;
+
+  /// Whether the track at [index] of the snapshot is looked up: the tracks in
+  /// the vocab language, or else the first (the one being learned).
+  bool isVocabTrack(int index) {
+    final tracks = snapshot?.tracks ?? const <DisplayedTrack>[];
+    if (index >= tracks.length) return false;
+    final code = vocab?.settings.trackLanguage.trim() ?? '';
+    return code.isEmpty ? index == 0 : tracks[index].track.languageCode == code;
+  }
+
+  /// The words of the line shown on track [index], when they should be
+  /// coloured and have been looked up.
+  List<VocabToken>? vocabTokensFor(int index) {
+    if (!showsVocab || !isVocabTrack(index)) return null;
+    final displayed = snapshot!.tracks[index];
+    final cue = displayed.cue;
+    if (cue == null || displayed.isHidden) return null;
+    return vocab!.tokensFor(cue.text.text);
+  }
+
+  void _requestVocab() {
+    final highlighter = vocab;
+    final tracks = snapshot?.tracks;
+    if (highlighter == null || tracks == null || !showsVocab) return;
+    highlighter.request([
+      for (var i = 0; i < tracks.length; i++)
+        if (isVocabTrack(i) && tracks[i].cue != null && !tracks[i].isHidden)
+          tracks[i].cue!.text.text,
+    ]);
+  }
+
+  /// Saves a word edit, with the line as its example sentence and this video
+  /// as its source. Lines are looked up again afterwards.
+  Future<VocabSaveResult> saveVocab(VocabEdit edit, {StudyCue? cue}) async {
+    final highlighter = vocab!;
+    final withContext = cue == null
+        ? edit
+        : VocabEdit(
+            language: edit.language,
+            term: edit.term,
+            status: edit.status,
+            clearStatus: edit.clearStatus,
+            translation: edit.translation,
+            parent: edit.parent,
+            expectModifiedMs: edit.expectModifiedMs,
+            deck: edit.deck,
+            context: VocabContext(
+              sentence: cue.text.text.replaceAll('\n', ' ').trim(),
+              sourceRef: 'voracious:${video.id}',
+              sourceTitle: video.name,
+              location: formatDuration(cue.begin),
+            ),
+          );
+    final result = await highlighter.save(withContext);
+    _requestVocab();
+    return result;
   }
 
   // Intents, forwarded. The session decides what each one means in the current
@@ -270,6 +355,8 @@ class PlayerController extends ChangeNotifier {
 
     // media_kit tears the video texture down with the player.
     await _player?.dispose();
+    vocab?.dispose();
+    _vocabTransport?.close();
     super.dispose();
   }
 }

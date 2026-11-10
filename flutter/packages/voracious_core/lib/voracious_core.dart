@@ -9,7 +9,7 @@
 /// Platform-bound pieces live behind interfaces that the host application
 /// implements: [MediaFileSystem] for storage, [Tokenizer] for morphological
 /// analysis, [CharsetDecoder] for legacy encodings, [MediaPlayer] for
-/// playback, [AnkiTransport] for HTTP, and [KeyValueStore] for persistence.
+/// playback, [AnkiTransport] and [VocabTransport] for HTTP, and [KeyValueStore] for persistence.
 /// `dart:io` implementations of the first two are in `voracious_core_io.dart`.
 library;
 
@@ -82,6 +82,9 @@ export 'src/dictionary/yomichan_dictionary.dart';
 // Anki export
 export 'src/anki/anki_connect.dart';
 export 'src/anki/card_builder.dart';
+
+// Vocab server (word statuses)
+export 'src/vocab/vocab_client.dart';
 
 // Settings and persistence
 export 'src/settings/key_value_store.dart';

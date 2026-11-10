@@ -9,6 +9,7 @@ import '../state/library_controller.dart';
 import '../widgets/transport_bar.dart' show formatDuration;
 import 'about_screen.dart';
 import 'player_screen.dart';
+import 'vocab_settings_dialog.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key, required this.controller});
@@ -36,6 +37,21 @@ class LibraryScreen extends StatelessWidget {
                         controller.status == ScanStatus.scanning
                     ? null
                     : controller.rescan,
+              ),
+              IconButton(
+                icon: const Icon(Icons.translate),
+                tooltip: 'Vocab server',
+                onPressed: () async {
+                  final settings = await showVocabSettingsDialog(
+                    context,
+                    controller.preferences.vocab,
+                  );
+                  if (settings != null) {
+                    await controller.updatePreferences(
+                      controller.preferences.copyWith(vocab: settings),
+                    );
+                  }
+                },
               ),
               IconButton(
                 icon: const Icon(Icons.info_outline),

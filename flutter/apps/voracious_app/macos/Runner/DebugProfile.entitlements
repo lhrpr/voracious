@@ -8,6 +8,8 @@
 	  bookmark. libmpv comes bundled by media_kit either way. Release builds
 	  keep the sandbox; see Release.entitlements.
 	-->
+	<key>com.apple.security.network.client</key>
+	<true/>
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
 	<key>com.apple.security.cs.allow-jit</key>

@@ -6,4 +6,5 @@
 library;
 
 export 'src/io/io_anki_transport.dart';
+export 'src/io/io_vocab_transport.dart';
 export 'src/io/local_file_system.dart';

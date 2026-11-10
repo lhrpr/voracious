@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:voracious_core/voracious_core.dart';
 
 import 'annotated_text_view.dart';
+import 'vocab_line_view.dart';
 
 class SubtitleStack extends StatelessWidget {
   const SubtitleStack({
@@ -18,9 +19,17 @@ class SubtitleStack extends StatelessWidget {
     required this.showRuby,
     required this.fontScale,
     this.onRevealTrack,
+    this.vocabTokensFor,
+    this.onVocabTap,
   });
 
   final StudySessionSnapshot snapshot;
+
+  /// The coloured words of track `index`'s line, or null to draw it plainly.
+  final List<VocabToken>? Function(int index)? vocabTokensFor;
+
+  /// A coloured word was clicked on track `index`.
+  final void Function(int index, VocabToken token, Rect wordRect)? onVocabTap;
   final bool showRuby;
   final double fontScale;
 
@@ -46,6 +55,10 @@ class SubtitleStack extends StatelessWidget {
             showRuby: showRuby,
             fontScale: fontScale,
             onReveal: onRevealTrack,
+            vocabTokens: vocabTokensFor?.call(index),
+            onVocabTap: onVocabTap == null
+                ? null
+                : (token, rect) => onVocabTap!(index, token, rect),
           ),
       ],
     );
@@ -59,7 +72,12 @@ class _TrackLine extends StatelessWidget {
     required this.showRuby,
     required this.fontScale,
     this.onReveal,
+    this.vocabTokens,
+    this.onVocabTap,
   });
+
+  final List<VocabToken>? vocabTokens;
+  final void Function(VocabToken token, Rect wordRect)? onVocabTap;
 
   final DisplayedTrack displayed;
   final bool isPrimary;
@@ -93,6 +111,19 @@ class _TrackLine extends StatelessWidget {
 
     if (displayed.isHidden) {
       return _HiddenLine(height: size * 1.6, onReveal: onReveal);
+    }
+
+    final tokens = vocabTokens;
+    if (tokens != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 24),
+        child: VocabLineView(
+          text: cue.text.text,
+          tokens: tokens,
+          style: style,
+          onTap: onVocabTap,
+        ),
+      );
     }
 
     return Padding(
