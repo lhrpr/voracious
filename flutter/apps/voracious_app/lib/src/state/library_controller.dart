@@ -6,17 +6,29 @@
 /// would only move the same calls somewhere less obvious.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:voracious_core/voracious_core.dart';
 import 'package:voracious_core/voracious_core_io.dart';
+
+import 'library_metadata.dart';
 
 /// Where a collection is in its scan.
 enum ScanStatus { idle, scanning, ready, failed }
 
 class LibraryController extends ChangeNotifier {
-  LibraryController({required this.profiles});
+  LibraryController({required this.profiles, this.metadata}) {
+    // The library screen listens to this controller alone; metadata arriving
+    // in the background is just another reason for it to rebuild.
+    metadata?.addListener(notifyListeners);
+  }
 
   final ProfileRepository profiles;
+
+  /// Online metadata for the scanned titles. Null leaves the library as the
+  /// scan found it, with no network access — which is what tests want.
+  final LibraryMetadata? metadata;
 
   static const MediaFileSystem _fileSystem = LocalFileSystem();
 
@@ -50,6 +62,7 @@ class LibraryController extends ChangeNotifier {
 
   Future<void> load() async {
     _profile = await profiles.loadProfile();
+    await metadata?.updateSettings(_profile.preferences.metadata);
     _loaded = true;
     notifyListeners();
 
@@ -117,6 +130,8 @@ class LibraryController extends ChangeNotifier {
         _index.videos.map((v) => v.id),
       );
       _status = ScanStatus.ready;
+      // Not awaited: the library is usable while artwork fills in.
+      unawaited(metadata?.attach(_index));
     } on Object catch (error) {
       _error = error.toString();
       _status = ScanStatus.failed;
@@ -130,6 +145,7 @@ class LibraryController extends ChangeNotifier {
     _profile = _profile.copyWith(preferences: preferences);
     await profiles.saveProfile(_profile);
     notifyListeners();
+    await metadata?.updateSettings(preferences.metadata);
   }
 
   /// Records where the user got to, so the library can show progress and the
@@ -153,5 +169,12 @@ class LibraryController extends ChangeNotifier {
       return Duration.zero;
     }
     return profiles.loadPlaybackPosition(collection.rootPath, videoId);
+  }
+
+  @override
+  void dispose() {
+    metadata?.removeListener(notifyListeners);
+    metadata?.dispose();
+    super.dispose();
   }
 }

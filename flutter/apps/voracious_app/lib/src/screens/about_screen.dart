@@ -51,6 +51,20 @@ class AboutScreen extends StatelessWidget {
             ],
             const SizedBox(height: 24),
             Text(
+              'Metadata',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Series and episode information is from TVmaze (tvmaze.com), '
+              'licensed CC BY-SA 4.0.\n'
+              'Film and localised information is from TMDB '
+              '(themoviedb.org). This product uses the TMDB API but is not '
+              'endorsed or certified by TMDB.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 24),
+            Text(
               'Third-party software',
               style: Theme.of(context).textTheme.titleMedium,
             ),

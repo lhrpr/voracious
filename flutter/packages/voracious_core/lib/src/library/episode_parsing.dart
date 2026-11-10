@@ -191,3 +191,55 @@ String prettifyTitle(String rawName) {
   name = name.replaceAll(RegExp(r'[\s\-]+$'), '');
   return name.isEmpty ? rawName.trim() : name;
 }
+
+/// The release year carried in a title's name, or null.
+///
+/// Only a year that is plainly release information counts: one in brackets
+/// (`Mad Men (2007)`), or one standing between the title and release metadata
+/// or the end of the name (`Mad.Men.2007.1080p`). A number that is the whole
+/// title, or part of it, is left alone — `2001 A Space Odyssey` and
+/// `Blade Runner 2049` have no year here.
+int? parseReleaseYear(String rawName) {
+  final name = _withoutExtension(rawName);
+
+  final bracketed = RegExp(r'[\[(]((?:19|20)\d{2})[\])]').firstMatch(name);
+  if (bracketed != null) return int.parse(bracketed.group(1)!);
+
+  final spaced = name.replaceAll(RegExp(r'[._]+'), ' ');
+  final trailing = RegExp(
+    r'\S\s+((?:19|20)\d{2})(?=\s*$|\s+(?:s\d{1,2}e\d|\d{3,4}[pi]\b|'
+    r'bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|remux|x26[45]|hevc))',
+    caseSensitive: false,
+  ).firstMatch(spaced);
+  if (trailing == null) return null;
+
+  final year = int.parse(trailing.group(1)!);
+  // At the very end, a year is ambiguous with a title (`Blade Runner 2049`).
+  // Treat it as a year only when it is no later than next year.
+  final atEnd = spaced.trimRight().endsWith(trailing.group(1)!);
+  if (atEnd && year > DateTime.now().year + 1) return null;
+  return year;
+}
+
+/// For a file named after an episode — `Mad.Men.S03E07.720p.mkv` — the
+/// series name in front of the numbering, cleaned up. Null when the name has
+/// no season-and-episode numbering or nothing before it.
+///
+/// Used for episodes sitting loose in a collection root, where there is no
+/// series directory to take the name from.
+String? seriesNameFromEpisodeFile(String rawName) {
+  final name = _withoutExtension(rawName);
+  for (final pattern in _seasonEpisodePatterns) {
+    final match = pattern.firstMatch(name);
+    if (match == null) continue;
+    final before = name.substring(0, match.start);
+    if (before.replaceAll(RegExp(r'[\s._\-\[\]()]'), '').isEmpty) return null;
+    var title = prettifyTitle(before);
+    // `Doctor.Who.2005.S01E01`: the year belongs to the release, not the name.
+    if (parseReleaseYear(before) != null) {
+      title = title.replaceFirst(RegExp(r'\s*\(?(?:19|20)\d{2}\)?$'), '');
+    }
+    return title.isEmpty ? null : title;
+  }
+  return null;
+}

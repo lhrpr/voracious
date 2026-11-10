@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 
 import '../anki/card_builder.dart';
 import '../japanese/furigana.dart';
+import '../metadata/metadata_settings.dart';
 import '../study/subtitle_mode.dart';
 import '../vocab/vocab_client.dart';
 
@@ -30,6 +31,7 @@ class Preferences {
     this.subtitleFontScale = 1,
     this.resumePlayback = true,
     this.vocab = const VocabSettings(),
+    this.metadata = const MetadataSettings(),
   });
 
   /// Show furigana over kanji.
@@ -70,6 +72,9 @@ class Preferences {
   /// The vocab server that colours subtitle words by status while paused.
   final VocabSettings vocab;
 
+  /// Matching titles to online metadata: artwork, episode titles, overviews.
+  final MetadataSettings metadata;
+
   Preferences copyWith({
     bool? showRuby,
     bool? showHelp,
@@ -85,6 +90,7 @@ class Preferences {
     double? subtitleFontScale,
     bool? resumePlayback,
     VocabSettings? vocab,
+    MetadataSettings? metadata,
   }) =>
       Preferences(
         showRuby: showRuby ?? this.showRuby,
@@ -101,6 +107,7 @@ class Preferences {
         subtitleFontScale: subtitleFontScale ?? this.subtitleFontScale,
         resumePlayback: resumePlayback ?? this.resumePlayback,
         vocab: vocab ?? this.vocab,
+        metadata: metadata ?? this.metadata,
       );
 
   Map<String, Object?> toJson() => {
@@ -118,6 +125,7 @@ class Preferences {
         'subtitleFontScale': subtitleFontScale,
         'resumePlayback': resumePlayback,
         'vocab': vocab.toJson(),
+        'metadata': metadata.toJson(),
       };
 
   /// Reads preferences, falling back to the default for anything missing or
@@ -157,6 +165,10 @@ class Preferences {
           ? VocabSettings.fromJson(
               (json['vocab']! as Map).cast<String, Object?>())
           : defaults.vocab,
+      metadata: json['metadata'] is Map
+          ? MetadataSettings.fromJson(
+              (json['metadata']! as Map).cast<String, Object?>())
+          : defaults.metadata,
     );
   }
 }

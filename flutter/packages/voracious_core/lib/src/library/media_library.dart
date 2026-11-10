@@ -127,17 +127,29 @@ class MediaTitle {
   const MediaTitle.standalone({
     required this.name,
     required String this.videoId,
+    this.year,
+    this.sourceName,
   })  : isSeries = false,
         episodes = const [];
 
   const MediaTitle.series({
     required this.name,
     required this.episodes,
+    this.year,
+    this.sourceName,
   })  : isSeries = true,
         videoId = null;
 
   /// Display name, cleaned of release metadata.
   final String name;
+
+  /// Release year, when the folder or file name carried one. Used to tell
+  /// remakes apart when looking the title up.
+  final int? year;
+
+  /// The folder or file name the title was built from, before cleaning. Keeps
+  /// what cleaning throws away but a lookup can use, like `(US)`.
+  final String? sourceName;
 
   final bool isSeries;
 

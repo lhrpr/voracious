@@ -96,6 +96,8 @@ class MediaScanner {
       titles.add(MediaTitle.standalone(
         name: prettifyTitle(video.name),
         videoId: video.id,
+        year: parseReleaseYear(video.name),
+        sourceName: video.name,
       ));
     }
 
@@ -327,6 +329,7 @@ class MediaScanner {
   /// Decides whether a directory's videos form a series or a single title.
   MediaTitle? _buildTitle(String directoryName, List<_NumberedVideo> videos) {
     final name = prettifyTitle(directoryName);
+    final year = parseReleaseYear(directoryName);
     if (videos.isEmpty) return null;
 
     if (videos.length == 1) {
@@ -335,7 +338,12 @@ class MediaScanner {
       // season may simply not be downloaded yet.
       final numbering = parseEpisodeNumbering(only.video.name);
       if (numbering == null && only.seasonFromDirectory == null) {
-        return MediaTitle.standalone(name: name, videoId: only.video.id);
+        return MediaTitle.standalone(
+          name: name,
+          videoId: only.video.id,
+          year: year ?? parseReleaseYear(only.video.name),
+          sourceName: directoryName,
+        );
       }
     }
 
@@ -352,7 +360,12 @@ class MediaScanner {
     }
 
     episodes.sort(_compareEpisodes);
-    return MediaTitle.series(name: name, episodes: episodes);
+    return MediaTitle.series(
+      name: name,
+      episodes: episodes,
+      year: year,
+      sourceName: directoryName,
+    );
   }
 
   static int _compareEpisodes(SeriesEpisode a, SeriesEpisode b) {

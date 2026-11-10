@@ -4,10 +4,15 @@ library;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:voracious_core/voracious_core.dart';
+import 'package:voracious_core/voracious_core_io.dart' show IoArtworkCache;
 
 import '../state/library_controller.dart';
+import '../state/library_metadata.dart';
+import '../widgets/artwork_image.dart';
 import '../widgets/transport_bar.dart' show formatDuration;
 import 'about_screen.dart';
+import 'fix_match_dialog.dart';
+import 'metadata_settings_dialog.dart';
 import 'player_screen.dart';
 import 'vocab_settings_dialog.dart';
 
@@ -53,6 +58,22 @@ class LibraryScreen extends StatelessWidget {
                   }
                 },
               ),
+              if (controller.metadata != null)
+                IconButton(
+                  icon: const Icon(Icons.image_search),
+                  tooltip: 'Metadata',
+                  onPressed: () async {
+                    final settings = await showMetadataSettingsDialog(
+                      context,
+                      controller.preferences.metadata,
+                    );
+                    if (settings != null) {
+                      await controller.updatePreferences(
+                        controller.preferences.copyWith(metadata: settings),
+                      );
+                    }
+                  },
+                ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
                 tooltip: 'About',
@@ -205,6 +226,8 @@ class _TitleList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
+        if (controller.metadata case final metadata?)
+          _MetadataStatus(metadata: metadata),
         for (final title in index.titles)
           _TitleTile(title: title, controller: controller),
         if (index.unmatchedSubtitles.isNotEmpty)
@@ -233,35 +256,184 @@ class _TitleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metadata = controller.metadata;
+    final match = metadata?.metadataFor(title);
+    final artwork = metadata?.artwork;
+    final menu = _TitleMenu(title: title, controller: controller);
+
+    final poster = ArtworkImage(
+      url: match?.posterUrl,
+      cache: artwork,
+      width: 40,
+      height: 60,
+      placeholderIcon:
+          title.isSeries ? Icons.video_library_outlined : Icons.movie_outlined,
+    );
+
     if (!title.isSeries) {
       final video = controller.index.videoById(title.videoId!);
+      final numbering = metadata?.episodeNumberingOf(title);
+      final episode = metadata?.standaloneEpisodeFor(title);
+      final name = match?.name ?? title.name;
+      final heading = numbering == null
+          ? (match?.year == null ? name : '$name (${match!.year})')
+          : [
+              name,
+              episodeLabel(numbering.season, numbering.episode),
+              if (episode != null && episode.name.isNotEmpty) episode.name,
+            ].join(' · ');
       return ListTile(
-        leading: const Icon(Icons.movie_outlined),
-        title: Text(title.name),
+        leading: poster,
+        title: Text(heading),
         subtitle: _SubtitleSummary(
           video: video,
           position: controller.positions[title.videoId],
         ),
+        trailing: menu,
         onTap: () => _play(context, title.videoId!),
       );
     }
 
+    final year = match?.year ?? title.year;
+    final summary = [
+      if (year != null) '$year',
+      '${title.episodes.length} episodes',
+      if (match != null && match.genres.isNotEmpty)
+        match.genres.take(2).join(', '),
+    ].join(' · ');
+
     return ExpansionTile(
-      leading: const Icon(Icons.video_library_outlined),
-      title: Text(title.name),
-      subtitle: Text('${title.episodes.length} episodes'),
+      leading: poster,
+      title: Text(match?.name ?? title.name),
+      subtitle: Text(summary),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [menu, const Icon(Icons.expand_more)],
+      ),
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final episode in title.episodes)
-          ListTile(
-            contentPadding: const EdgeInsets.only(left: 56, right: 16),
-            dense: true,
-            title: Text(episode.displayName),
-            subtitle: _SubtitleSummary(
-              video: controller.index.videoById(episode.videoId),
-              position: controller.positions[episode.videoId],
+        if (match?.overview case final overview?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(72, 0, 24, 12),
+            child: Text(
+              overview,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
+          ),
+        for (final episode in title.episodes)
+          _EpisodeTile(
+            episode: episode,
+            listing: metadata?.episodeFor(title, episode),
+            showStill: match != null,
+            artwork: artwork,
+            video: controller.index.videoById(episode.videoId),
+            position: controller.positions[episode.videoId],
             onTap: () => _play(context, episode.videoId),
           ),
+      ],
+    );
+  }
+}
+
+/// `S03E07`, `E05` for a flat series, or empty with no number.
+String episodeLabel(int? season, int? episode) {
+  if (episode == null) return season == null ? '' : 'Season $season';
+  final e = 'E${episode.toString().padLeft(2, '0')}';
+  return season == null ? e : 'S${season.toString().padLeft(2, '0')}$e';
+}
+
+class _EpisodeTile extends StatelessWidget {
+  const _EpisodeTile({
+    required this.episode,
+    required this.listing,
+    required this.showStill,
+    required this.artwork,
+    required this.video,
+    required this.position,
+    required this.onTap,
+  });
+
+  final SeriesEpisode episode;
+
+  /// The service's entry for this episode, when the series is matched and
+  /// lists it.
+  final EpisodeMetadata? listing;
+
+  /// Whether to leave room for a still. Off for an unmatched series, which
+  /// would otherwise be a column of placeholders.
+  final bool showStill;
+  final IoArtworkCache? artwork;
+  final VideoEntry? video;
+  final Duration? position;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final listed = listing;
+    final label = episodeLabel(episode.season, episode.episode);
+    final title = listed != null && listed.name.isNotEmpty
+        ? (label.isEmpty ? listed.name : '$label · ${listed.name}')
+        : episode.displayName;
+
+    final row = ListTile(
+      contentPadding: EdgeInsets.only(left: showStill ? 72 : 56, right: 16),
+      dense: true,
+      leading: showStill
+          ? ArtworkImage(
+              url: listed?.stillUrl,
+              cache: artwork,
+              width: 80,
+              height: 45,
+              placeholderIcon: Icons.play_arrow_outlined,
+            )
+          : null,
+      title: Text(title),
+      subtitle: _SubtitleSummary(video: video, position: position),
+      onTap: onTap,
+    );
+
+    final overview = listed?.overview;
+    if (overview == null) return row;
+    return Tooltip(
+      message: overview,
+      waitDuration: const Duration(milliseconds: 700),
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: row,
+    );
+  }
+}
+
+/// Fix match and refresh, for one title.
+class _TitleMenu extends StatelessWidget {
+  const _TitleMenu({required this.title, required this.controller});
+
+  final MediaTitle title;
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = controller.metadata;
+    if (metadata == null ||
+        !metadata.settings.enabled ||
+        metadata.queryFor(title) == null) {
+      return const SizedBox.shrink();
+    }
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 18),
+      tooltip: 'Metadata',
+      onSelected: (action) async {
+        switch (action) {
+          case 'fix':
+            await showFixMatchDialog(context, metadata, title);
+          case 'refresh':
+            await metadata.refresh(title);
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'fix', child: Text('Fix match…')),
+        PopupMenuItem(value: 'refresh', child: Text('Refresh metadata')),
       ],
     );
   }
@@ -305,6 +477,50 @@ class _SubtitleSummary extends StatelessWidget {
       style: TextStyle(
         fontSize: 11,
         color: entry.hasStudyableSubtitles ? null : Theme.of(context).hintColor,
+      ),
+    );
+  }
+}
+
+/// A line above the titles while metadata is being looked up, or when the
+/// last lookup failed.
+class _MetadataStatus extends StatelessWidget {
+  const _MetadataStatus({required this.metadata});
+
+  final LibraryMetadata metadata;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = metadata.error;
+    if (!metadata.isMatching && error == null) return const SizedBox.shrink();
+    final (done, total) = metadata.progress;
+    final style = Theme.of(context).textTheme.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          if (metadata.isMatching) ...[
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Text('Matching metadata — $done of $total', style: style),
+          ],
+          if (error != null) ...[
+            if (metadata.isMatching) const SizedBox(width: 16),
+            Icon(Icons.cloud_off, size: 14, color: style?.color),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Metadata: $error',
+                style: style,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
