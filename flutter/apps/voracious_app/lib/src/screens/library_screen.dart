@@ -32,8 +32,10 @@ class LibraryScreen extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.refresh),
                 tooltip: 'Rescan',
-                onPressed:
-                    controller.selected == null ? null : controller.rescan,
+                onPressed: controller.selected == null ||
+                        controller.status == ScanStatus.scanning
+                    ? null
+                    : controller.rescan,
               ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
@@ -97,10 +99,24 @@ class _CollectionList extends StatelessWidget {
                       style: const TextStyle(fontSize: 10),
                     ),
                     onTap: () => controller.select(collection),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 16),
-                      tooltip: 'Remove from library',
-                      onPressed: () => controller.removeCollection(collection),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.refresh, size: 16),
+                          tooltip: 'Rescan folder',
+                          // Selecting a collection always rescans it.
+                          onPressed: controller.status == ScanStatus.scanning
+                              ? null
+                              : () => controller.select(collection),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          tooltip: 'Remove from library',
+                          onPressed: () =>
+                              controller.removeCollection(collection),
+                        ),
+                      ],
                     ),
                   ),
               ],
