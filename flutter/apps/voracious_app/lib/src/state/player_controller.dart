@@ -180,7 +180,9 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _loadSubtitles() async {
-    final analyzer = TextAnalyzer();
+    final analyzer = TextAnalyzer(optionsByLanguage: {
+      'jpn': AnnotationOptions(rubyStyle: preferences.rubyStyle),
+    });
     final loader = SubtitleTrackLoader(
       fileSystem: _fileSystem,
       analyzer: analyzer,

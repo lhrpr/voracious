@@ -12,9 +12,8 @@ import '../widgets/artwork_image.dart';
 import '../widgets/transport_bar.dart' show formatDuration;
 import 'about_screen.dart';
 import 'fix_match_dialog.dart';
-import 'metadata_settings_dialog.dart';
 import 'player_screen.dart';
-import 'vocab_settings_dialog.dart';
+import 'settings_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key, required this.controller});
@@ -44,36 +43,18 @@ class LibraryScreen extends StatelessWidget {
                     : controller.rescan,
               ),
               IconButton(
-                icon: const Icon(Icons.translate),
-                tooltip: 'Vocab server',
-                onPressed: () async {
-                  final settings = await showVocabSettingsDialog(
-                    context,
-                    controller.preferences.vocab,
-                  );
-                  if (settings != null) {
-                    await controller.updatePreferences(
-                      controller.preferences.copyWith(vocab: settings),
-                    );
-                  }
-                },
-              ),
-              if (controller.metadata != null)
-                IconButton(
-                  icon: const Icon(Icons.image_search),
-                  tooltip: 'Metadata',
-                  onPressed: () async {
-                    final settings = await showMetadataSettingsDialog(
-                      context,
-                      controller.preferences.metadata,
-                    );
-                    if (settings != null) {
-                      await controller.updatePreferences(
-                        controller.preferences.copyWith(metadata: settings),
-                      );
-                    }
-                  },
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Settings',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SettingsScreen(
+                      initial: controller.preferences,
+                      onChanged: controller.updatePreferences,
+                      showMetadata: controller.metadata != null,
+                    ),
+                  ),
                 ),
+              ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
                 tooltip: 'About',

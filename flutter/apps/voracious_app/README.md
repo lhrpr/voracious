@@ -37,6 +37,7 @@ lib/
     screens/
       library_screen.dart      collections and titles
       player_screen.dart       playback, subtitles, keyboard
+      settings_screen.dart     every stored preference; saves as it changes
       about_screen.dart        third-party notices and the source offer
     widgets/
       annotated_text_view.dart AnnotatedText -> widgets, with furigana
@@ -121,7 +122,7 @@ Two things are easy to trip over:
 - Dictionary lookup on word tap. `AnnotatedTextView` already reports the lemma
   of a tapped word; nothing consumes it yet, and there is no tokeniser for
   Japanese, so words are not yet segmented.
-- Anki export, and the settings screen for the preferences the core already
-  stores.
+- Anki export. Its settings (`AnkiExportSettings`) are stored but not yet
+  on the settings screen.
 - Security-scoped bookmarks, so a collection folder survives a relaunch under
   the sandbox.
