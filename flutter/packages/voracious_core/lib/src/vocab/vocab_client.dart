@@ -9,6 +9,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
@@ -95,17 +96,26 @@ class VocabParent {
 /// app, not here.
 @immutable
 class VocabSense {
-  const VocabSense({required this.cue, required this.translation, this.status});
+  const VocabSense({
+    required this.cue,
+    required this.translation,
+    this.status,
+    this.imageId,
+  });
 
   factory VocabSense.fromJson(Map<String, Object?> json) => VocabSense(
         cue: json['cue'] as String? ?? '',
         translation: json['translation'] as String? ?? '',
         status: VocabStatus.byWireName(json['status']),
+        imageId: json['image'] as String?,
       );
 
   final String cue;
   final String translation;
   final VocabStatus? status;
+
+  /// The sense's picture on the server, if it has one.
+  final String? imageId;
 }
 
 /// A word as the server reports it.
@@ -152,6 +162,12 @@ class VocabWord {
   final VocabStatus? status;
   final VocabParent? parent;
   final List<VocabSense> senses;
+
+  /// Pictures belong to senses, so the server only takes one for a word with
+  /// a single sense.
+  bool get acceptsPicture => senses.length <= 1;
+
+  bool get hasPicture => senses.length == 1 && senses.first.imageId != null;
 }
 
 /// A word (or multiword term) in a line of text, by code point offsets.
@@ -236,6 +252,7 @@ class VocabEdit {
     this.context,
     this.expectModifiedMs,
     this.deck,
+    this.image,
   });
 
   final String language;
@@ -252,6 +269,24 @@ class VocabEdit {
   /// Deck for a word that doesn't exist yet.
   final String? deck;
 
+  /// A picture for the word (PNG or JPEG bytes, up to 5 MB), replacing any it
+  /// has. Ignored by the server for a word with several senses.
+  final Uint8List? image;
+
+  /// This edit with the line it came from as its example sentence.
+  VocabEdit withContext(VocabContext context) => VocabEdit(
+        language: language,
+        term: term,
+        status: status,
+        clearStatus: clearStatus,
+        translation: translation,
+        parent: parent,
+        context: context,
+        expectModifiedMs: expectModifiedMs,
+        deck: deck,
+        image: image,
+      );
+
   Map<String, Object?> toJson() => {
         'language': language,
         'term': term,
@@ -262,6 +297,7 @@ class VocabEdit {
         if (context != null) 'context': context!.toJson(),
         if (expectModifiedMs != null) 'expect_modified_ms': expectModifiedMs,
         if (deck != null && deck!.isNotEmpty) 'deck': deck,
+        if (image != null) 'image': base64Encode(image!),
       };
 }
 

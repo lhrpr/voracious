@@ -171,6 +171,7 @@ class _PlayerBody extends StatelessWidget {
       wordRect: wordRect,
       settings: vocab.settings,
       save: (edit) => controller.saveVocab(edit, cue: cue),
+      captureFrame: controller.captureFrame,
     );
   }
 

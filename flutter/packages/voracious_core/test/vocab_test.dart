@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:voracious_core/voracious_core.dart';
@@ -130,6 +131,40 @@ void main() {
     });
     expect(result.outcome, VocabOutcome.updated);
     expect(result.word!.status, VocabStatus.known);
+  });
+
+  test('a picture is sent as base64 and kept with the line', () {
+    final edit = VocabEdit(
+      language: 'es',
+      term: 'gato',
+      image: Uint8List.fromList([0xff, 0xd8, 0xff, 1]),
+    ).withContext(const VocabContext(
+      sentence: 'El gato duerme.',
+      sourceRef: 'voracious:v1',
+      sourceTitle: 'Show 01',
+    ));
+    expect(edit.toJson()['image'], '/9j/AQ==');
+    expect((edit.toJson()['context']! as Map)['sentence'], 'El gato duerme.');
+    expect(const VocabEdit(language: 'es', term: 'x').toJson(),
+        isNot(contains('image')));
+  });
+
+  test('only a single-sense word takes a picture', () {
+    VocabWord word(List<Map<String, Object?>> senses) => VocabWord.fromJson(
+        {'id': 'e', 'term': 't', 'senses': senses});
+    expect(word([]).acceptsPicture, isTrue);
+    expect(word([]).hasPicture, isFalse);
+    final pictured = word([
+      {'cue': 'el gato', 'image': 'abc'}
+    ]);
+    expect((pictured.acceptsPicture, pictured.hasPicture), (true, true));
+    expect(pictured.senses.single.imageId, 'abc');
+    expect(
+        word([
+          {'cue': 'el capital', 'image': 'abc'},
+          {'cue': 'la capital'},
+        ]).acceptsPicture,
+        isFalse);
   });
 
   test('clearing a status sends null', () {

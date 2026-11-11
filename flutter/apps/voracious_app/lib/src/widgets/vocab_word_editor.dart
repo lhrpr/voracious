@@ -1,5 +1,6 @@
 /// The card that opens over a clicked subtitle word: its status, translation
-/// and parent form, all saved to the vocab server.
+/// and parent form, all saved to the vocab server, with the paused video
+/// frame as its picture if wanted.
 ///
 /// A status button saves straight away, as clicking a status does in Lute:
 /// most of the time that is the whole edit. The text fields wait for Save (or
@@ -15,6 +16,9 @@ import 'vocab_line_view.dart';
 /// Saves an edit; supplied by the player, which adds the line and video.
 typedef VocabSaver = Future<VocabSaveResult> Function(VocabEdit edit);
 
+/// The frame on screen as JPEG bytes, or null when there's no picture.
+typedef FrameCapturer = Future<Uint8List?> Function();
+
 /// Opens the editor next to [wordRect] (global coordinates).
 Future<void> showVocabWordEditor({
   required BuildContext context,
@@ -22,6 +26,7 @@ Future<void> showVocabWordEditor({
   required Rect wordRect,
   required VocabSettings settings,
   required VocabSaver save,
+  FrameCapturer? captureFrame,
 }) =>
     showDialog<void>(
       context: context,
@@ -44,6 +49,7 @@ Future<void> showVocabWordEditor({
                 token: token,
                 settings: settings,
                 save: save,
+                captureFrame: captureFrame,
               ),
             ),
           ],
@@ -56,11 +62,13 @@ class _VocabWordEditor extends StatefulWidget {
     required this.token,
     required this.settings,
     required this.save,
+    this.captureFrame,
   });
 
   final VocabToken token;
   final VocabSettings settings;
   final VocabSaver save;
+  final FrameCapturer? captureFrame;
 
   @override
   State<_VocabWordEditor> createState() => _VocabWordEditorState();
@@ -76,6 +84,19 @@ class _VocabWordEditorState extends State<_VocabWordEditor> {
   bool _saving = false;
   String? _message;
 
+  /// The paused frame, taken when the editor opens so it matches what's on
+  /// screen.
+  Uint8List? _frame;
+
+  /// Whether to send [_frame] as the word's picture. On unless the word
+  /// already has one, so a picture chosen in the vocab app isn't replaced
+  /// by accident.
+  late bool _attachFrame = !(_word?.hasPicture ?? false);
+
+  bool get _offersFrame => _frame != null && (_word?.acceptsPicture ?? true);
+
+  bool get _sendsFrame => _offersFrame && _attachFrame;
+
   /// New words are saved in lower case: a word that starts a sentence is
   /// still the same word.
   String get _term => _word?.term ?? widget.token.text.toLowerCase();
@@ -84,6 +105,9 @@ class _VocabWordEditorState extends State<_VocabWordEditor> {
   void initState() {
     super.initState();
     _focus.requestFocus();
+    widget.captureFrame?.call().then((frame) {
+      if (mounted) setState(() => _frame = frame);
+    }, onError: (_) {});
   }
 
   @override
@@ -103,7 +127,7 @@ class _VocabWordEditorState extends State<_VocabWordEditor> {
     final word = _word;
     final translation = _translation.text.trim();
     final parent = _parent.text.trim();
-    if (status == null && !_textChanged) {
+    if (status == null && !_textChanged && !_sendsFrame) {
       Navigator.of(context).pop();
       return;
     }
@@ -121,6 +145,7 @@ class _VocabWordEditorState extends State<_VocabWordEditor> {
         parent: parent != (word?.parent?.term ?? '') ? parent : null,
         expectModifiedMs: word?.modifiedMs,
         deck: widget.settings.deck,
+        image: _sendsFrame ? _frame : null,
       ));
       if (!mounted) return;
       switch (result.outcome) {
@@ -135,6 +160,7 @@ class _VocabWordEditorState extends State<_VocabWordEditor> {
             _word = result.word;
             _translation.text = result.word?.translation ?? '';
             _parent.text = result.word?.parent?.term ?? '';
+            _attachFrame = _attachFrame && !(result.word?.hasPicture ?? false);
             _message = 'This word was changed elsewhere. Here it is now; '
                 'save again to apply your change.';
           });
@@ -251,6 +277,15 @@ class _VocabWordEditorState extends State<_VocabWordEditor> {
                 ),
                 onSubmitted: (_) => _submit(),
               ),
+              if (_offersFrame) ...[
+                const SizedBox(height: 10),
+                _FrameToggle(
+                  frame: _frame!,
+                  value: _attachFrame,
+                  replaces: word?.hasPicture ?? false,
+                  onChanged: (v) => setState(() => _attachFrame = v),
+                ),
+              ],
               if (_message != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
@@ -369,4 +404,49 @@ class _StatusButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A thumbnail of the paused frame with a checkbox to use it as the picture.
+class _FrameToggle extends StatelessWidget {
+  const _FrameToggle({
+    required this.frame,
+    required this.value,
+    required this.replaces,
+    required this.onChanged,
+  });
+
+  final Uint8List frame;
+  final bool value;
+
+  /// The word already has a picture, which this would replace.
+  final bool replaces;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => onChanged(!value),
+        child: Row(
+          children: [
+            Checkbox(
+              value: value,
+              onChanged: (v) => onChanged(v ?? false),
+            ),
+            Expanded(
+              child: Text(replaces
+                  ? 'Replace its picture with this frame'
+                  : 'Use this frame as its picture'),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.memory(
+                frame,
+                height: 44,
+                gaplessPlayback: true,
+                semanticLabel: 'The paused video frame',
+              ),
+            ),
+          ],
+        ),
+      );
 }

@@ -17,6 +17,8 @@ import 'dart:typed_data';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:voracious_core/voracious_core.dart';
 
+import 'frame_capture.dart';
+
 class MediaKitPlayer implements MediaPlayer {
   MediaKitPlayer._(this.player) {
     _subscriptions.addAll([
@@ -216,6 +218,18 @@ class MediaKitPlayer implements MediaPlayer {
   @override
   Future<void> setSpeed(double speed) => player.setRate(speed);
 
+  /// The current frame as a card-sized JPEG, or null when there's no picture
+  /// to take (audio only, or the engine couldn't produce one).
+  Future<Uint8List?> capturePicture() async {
+    final Uint8List full;
+    try {
+      full = await captureFrame();
+    } on Object {
+      return null;
+    }
+    return full.isEmpty ? null : shrinkFrame(full);
+  }
+
   @override
   Future<void> setVolume(double volume) =>
       player.setVolume((volume * 100).clamp(0, 100).toDouble());
@@ -250,7 +264,8 @@ class MediaKitPlayer implements MediaPlayer {
 
   @override
   Future<Uint8List> captureFrame() async {
-    final bytes = await player.screenshot(format: 'image/png');
+    // JPEG: media_kit encodes in Dart, and PNG at full resolution is slow.
+    final bytes = await player.screenshot(format: 'image/jpeg');
     if (bytes == null) {
       throw StateError('no frame to capture');
     }

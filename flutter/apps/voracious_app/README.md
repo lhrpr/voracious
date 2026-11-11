@@ -122,7 +122,8 @@ Two things are easy to trip over:
 - Dictionary lookup on word tap. `AnnotatedTextView` already reports the lemma
   of a tapped word; nothing consumes it yet, and there is no tokeniser for
   Japanese, so words are not yet segmented.
-- Anki export. Its settings (`AnkiExportSettings`) are stored but not yet
-  on the settings screen.
+- Sentence audio on cards. Words go to the vocab server (anki-alternative)
+  with the line, the video, the timestamp and optionally the paused frame as
+  a picture; there is nowhere there to put a clip of the line yet.
 - Security-scoped bookmarks, so a collection folder survives a relaunch under
   the sandbox.

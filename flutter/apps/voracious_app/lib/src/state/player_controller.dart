@@ -295,28 +295,22 @@ class PlayerController extends ChangeNotifier {
     ]);
   }
 
+  /// The frame on screen, for a word's picture. Null without a picture.
+  Future<Uint8List?> captureFrame() async =>
+      _videoController == null ? null : _player?.capturePicture();
+
   /// Saves a word edit, with the line as its example sentence and this video
   /// as its source. Lines are looked up again afterwards.
   Future<VocabSaveResult> saveVocab(VocabEdit edit, {StudyCue? cue}) async {
     final highlighter = vocab!;
     final withContext = cue == null
         ? edit
-        : VocabEdit(
-            language: edit.language,
-            term: edit.term,
-            status: edit.status,
-            clearStatus: edit.clearStatus,
-            translation: edit.translation,
-            parent: edit.parent,
-            expectModifiedMs: edit.expectModifiedMs,
-            deck: edit.deck,
-            context: VocabContext(
-              sentence: cue.text.text.replaceAll('\n', ' ').trim(),
-              sourceRef: 'voracious:${video.id}',
-              sourceTitle: video.name,
-              location: formatDuration(cue.begin),
-            ),
-          );
+        : edit.withContext(VocabContext(
+            sentence: cue.text.text.replaceAll('\n', ' ').trim(),
+            sourceRef: 'voracious:${video.id}',
+            sourceTitle: video.name,
+            location: formatDuration(cue.begin),
+          ));
     final result = await highlighter.save(withContext);
     _requestVocab();
     return result;

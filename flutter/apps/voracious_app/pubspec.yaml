@@ -18,6 +18,8 @@ dependencies:
   voracious_core:
     path: ../../packages/voracious_core
   media_kit: ^1.2.0
+  # Shrinks video frames before they're sent as word pictures.
+  image: ^4.12.0
   media_kit_video: ^1.3.0
   # Bundles a stock (GPL) libmpv for each platform. Fine for a personal,
   # open-source build; see the root README.

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voracious_app/src/widgets/vocab_line_view.dart';
@@ -147,6 +149,110 @@ void main() {
       'term': 'hablaba',
       'parent': 'hablar',
       'deck': 'Films',
+    });
+  });
+
+  group('the paused frame as a picture', () {
+    // A real 1×1 PNG, so Image.memory can decode it.
+    final frame = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==');
+
+    Future<List<VocabEdit>> open(WidgetTester tester, VocabToken token) async {
+      final edits = <VocabEdit>[];
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showVocabWordEditor(
+                context: context,
+                token: token,
+                wordRect: const Rect.fromLTWH(300, 500, 80, 30),
+                settings: const VocabSettings(language: 'Spanish'),
+                save: (edit) async {
+                  edits.add(edit);
+                  return const VocabSaveResult(outcome: VocabOutcome.updated);
+                },
+                captureFrame: () async => frame,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      return edits;
+    }
+
+    VocabToken pictured(List<VocabSense> senses) => VocabToken(
+          start: 0,
+          end: 4,
+          text: 'gato',
+          word: VocabWord(
+            id: 'e',
+            language: 'Spanish',
+            term: 'gato',
+            translation: 'cat',
+            modifiedMs: 7,
+            senses: senses,
+          ),
+        );
+
+    testWidgets('goes with a new word, even from a status key',
+        (tester) async {
+      final edits = await open(
+          tester, const VocabToken(start: 0, end: 4, text: 'gato'));
+      expect(find.text('Use this frame as its picture'), findsOneWidget);
+
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+      expect(edits.single.image, frame);
+      expect(edits.single.status, VocabStatus.s2);
+    });
+
+    testWidgets('can be left off', (tester) async {
+      final edits = await open(
+          tester, const VocabToken(start: 0, end: 4, text: 'gato'));
+      await tester.tap(find.text('Use this frame as its picture'));
+      await tester.pump();
+      await tester.tap(find.text('3'));
+      await tester.pumpAndSettle();
+      expect(edits.single.image, isNull);
+    });
+
+    testWidgets('is off for a word that has a picture, and Save alone sends '
+        'it once ticked', (tester) async {
+      final edits = await open(
+          tester,
+          pictured(const [
+            VocabSense(cue: 'el gato', translation: 'cat', imageId: 'abc')
+          ]));
+      expect(find.text('Replace its picture with this frame'), findsOneWidget);
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(edits, isEmpty, reason: 'nothing changed, so nothing is sent');
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(edits.single.image, frame);
+      expect(edits.single.status, isNull);
+    });
+
+    testWidgets('isn\'t offered for a word with several senses',
+        (tester) async {
+      await open(
+          tester,
+          pictured(const [
+            VocabSense(cue: 'el capital', translation: 'money'),
+            VocabSense(cue: 'la capital', translation: 'city'),
+          ]));
+      expect(find.byType(Checkbox), findsNothing);
     });
   });
 }

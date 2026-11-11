@@ -62,7 +62,7 @@ abstract interface class MediaPlayer {
 
   Future<void> setAudioDelay(Duration delay);
 
-  /// Captures the current frame as encoded image bytes, for Anki cards.
+  /// Captures the current frame as encoded image bytes, for flashcard pictures.
   ///
   /// The frame comes back at the video's own resolution — engines do not scale
   /// screenshots — so a caller that wants a card-sized image scales it itself.
